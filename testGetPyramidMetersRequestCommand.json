@@ -1,0 +1,62 @@
+{
+    "id": 1,
+    "creationDate": "2021-11-25T09:45:21.095905Z",
+    "uuid": "c01c022e-cb4c-4512-803f-f1ee70d6b16f",
+    "commandType": "GetPyramidMetersRequestCommand",
+    "connectionInformation": {
+        "id": 1,
+        "creationDate": "2021-11-25T09:45:21.146736Z",
+        "uuid": "529c66af-60d5-4af5-96fa-d56ac3975c13",
+        "protocolProperties": "HTTP_REST",
+        "host": "localhost",
+        "port": 1234,
+        "username": "username",
+        "password": "password",
+        "rabbitExchange": null,
+        "rabbitQueue": null,
+        "rabbitRoutingKey": null,
+        "restAbsolutePath": "/api/v1",
+        "restRequestMethod": "GET",
+        "soapAbsolutePath": null,
+        "soapMethod": null,
+        "soapServiceName": null,
+        "soapMethodNameSpace": null
+    },
+    "body": {
+        "id": 1,
+        "creationDate": "2021-11-25T09:45:21.153800Z",
+        "uuid": "f0eac468-64ed-407c-a62d-3c4eddf513e4",
+        "beginDateTime": "2021-11-25T09:45:21.149504Z",
+        "endDateTime": "2018-11-26T09:45:21.149506Z",
+        "requestLimit": 500,
+        "requestOffset": 0,
+        "arrayOfGuids": {
+            "guid": [
+                "74ceeb96-4d23-4dc5-98d5-5a92bfdb4137",
+                "4d01c0bf-e3d1-408d-9210-cb1f9a37f584",
+                "59903c13-cb73-4b7c-a902-0c71f0c66635",
+                "04b692e1-d36f-402c-8fdf-a35cbbbfb570",
+                "8e633915-112c-4be7-97bb-584298ec8698",
+                "9a20493d-4cc5-4f5b-a5c6-6e97f7bc0fa9",
+                "2c740b41-6bbc-45e1-b881-bfa08d8c6b02",
+                "32fceceb-fa93-4553-b500-4d1cf94c75b3",
+                "11107d6e-6608-4a90-8c0c-a2ccef903931",
+                "687ea893-0e12-4aaf-9e0e-cefc542d7966"
+            ]
+        },
+        "partnerGuidList": [
+        ],
+        "requestType": "GetPyramidMetersRequestCommand"
+    },
+    "commandStore": {
+        "id": 1,
+        "creationDate": "2021-11-25T09:45:21.101358Z",
+        "uuid": "8f5297c9-b995-4564-ac5d-96e016ec4034",
+        "isExecuted": false,
+        "isCompleted": false,
+        "isFailed": false,
+        "isCanceled": false,
+        "previousCommandUuid": null,
+        "commandDict": "GET_PYRAMID_METERS_REQUEST_COMMAND"
+    }
+}
