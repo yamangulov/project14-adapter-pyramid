@@ -6,15 +6,9 @@ import org.springframework.batch.item.ParseException;
 import org.springframework.batch.item.UnexpectedInputException;
 import org.springframework.web.client.RestTemplate;
 
-public class RestMeterReader implements ItemReader<String> {
-    private final String pyramidRestUrl;
-    private final RestTemplate restTemplate;
-
-    public RestMeterReader(String pyramidRestUrl, RestTemplate restTemplate) {
-        this.pyramidRestUrl = pyramidRestUrl;
-        this.restTemplate = restTemplate;
+public class MeterEventsDetailReader implements ItemReader<String> {
+    public MeterEventsDetailReader(String pyramidRestUrl, RestTemplate restTemplate) {
     }
-
 
     @Override
     public String read() throws Exception, UnexpectedInputException, ParseException, NonTransientResourceException {

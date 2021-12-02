@@ -5,8 +5,8 @@ import org.springframework.batch.item.ItemWriter;
 
 import java.util.List;
 
-public class FullMeterWriter implements ItemWriter<String> {
-    public FullMeterWriter(RabbitTemplate rabbitTemplate) {
+public class MeterPointWriter implements ItemWriter<String> {
+    public MeterPointWriter(RabbitTemplate rabbitTemplate) {
     }
 
     @Override
