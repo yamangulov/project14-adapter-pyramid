@@ -1,6 +1,7 @@
 package org.satel.eip.project14.adapter.pyramid.springbatch.meter.configuration;
 
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandParametersContainer;
+import org.satel.eip.project14.adapter.pyramid.domain.command.entity.GetMeterRequestCommand;
 import org.satel.eip.project14.adapter.pyramid.springbatch.JobCompletionNotificationListener;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader.MeterEventsDetailReader;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader.MeterEventsReader;
@@ -28,6 +29,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Configuration
@@ -59,14 +62,14 @@ public class RestMeterBatchConfiguration {
     }
 
     @Bean("commandParametersMap")
-    public ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap() {
+    public ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap() {
         return new ConcurrentHashMap<>();
     }
 
     // для хранения результатов промежуточных запросов к Rest API Пирамиды и передачи их между Spring Batch steps
     // writer() в таких steps пишут результаты именно сюда, и только когда все данные получены - в RabbitMQ
     @Bean("stepsResultsMap")
-    public ConcurrentHashMap<String, String> stepsResultsMap() {
+    public ConcurrentHashMap<String, Map<String, String>> stepsResultsMap() {
         return new ConcurrentHashMap<>();
     }
 
@@ -87,10 +90,10 @@ public class RestMeterBatchConfiguration {
 
     //endpoint GET /meterparameterswithstatus/{meterguid}/{parameterguid}/{dtfrom}/{dtto}
     @Bean
-    public Step meterParametersWithStatusStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate) {
+    public Step meterParametersWithStatusStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap) {
         return stepBuilderFactory.get("stepMeterParametersWithStatus")
-                .<String, String>chunk(chunkSize)
-                .reader(new MeterParametresWithStatusReader(pyramidRestUrl, restTemplate))
+                .<List<String>, List<String>>chunk(chunkSize)
+                .reader(new MeterParametresWithStatusReader(pyramidRestUrl, restTemplate, commandParametersMap))
                 .writer(new MeterParametresWithStatusWriter(rabbitTemplate))
                 .build();
     }

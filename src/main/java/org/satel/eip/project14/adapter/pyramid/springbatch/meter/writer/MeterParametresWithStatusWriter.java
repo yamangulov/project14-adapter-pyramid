@@ -5,12 +5,12 @@ import org.springframework.batch.item.ItemWriter;
 
 import java.util.List;
 
-public class MeterParametresWithStatusWriter implements ItemWriter<String> {
+public class MeterParametresWithStatusWriter implements ItemWriter<List<String>> {
     public MeterParametresWithStatusWriter(RabbitTemplate rabbitTemplate) {
     }
 
     @Override
-    public void write(List<? extends String> list) throws Exception {
+    public void write(List<? extends List<String>> items) throws Exception {
 
     }
 }

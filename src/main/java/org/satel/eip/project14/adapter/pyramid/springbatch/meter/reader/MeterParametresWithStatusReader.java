@@ -1,23 +1,98 @@
 package org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader;
 
+import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandParametersContainer;
+import org.satel.eip.project14.adapter.pyramid.domain.command.container.GetMeterRequest;
+import org.satel.eip.project14.adapter.pyramid.domain.command.entity.GetMeterRequestCommand;
+import org.satel.eip.project14.adapter.pyramid.domain.command.entity.RestRequestType;
+import org.satel.eip.project14.data.model.pyramid.MeterParameter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.batch.core.StepExecution;
+import org.springframework.batch.core.annotation.AfterStep;
+import org.springframework.batch.core.annotation.BeforeStep;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.NonTransientResourceException;
 import org.springframework.batch.item.ParseException;
 import org.springframework.batch.item.UnexpectedInputException;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.web.client.RestTemplate;
 
-public class MeterParametresWithStatusReader implements ItemReader<String> {
+import javax.xml.datatype.XMLGregorianCalendar;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class MeterParametresWithStatusReader implements ItemReader<List<String>> {
+    private static final Logger LOGGER = LoggerFactory.getLogger(MeterParametresWithStatusReader.class);
+
     private final String pyramidRestUrl;
     private final RestTemplate restTemplate;
+    private final ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap;
+    private List<String> arrayOfGuids = new ArrayList<>();
+    private XMLGregorianCalendar dtFrom;
+    private XMLGregorianCalendar dtTo;
+    private boolean done;
 
-    public MeterParametresWithStatusReader(String pyramidRestUrl, RestTemplate restTemplate) {
+    public MeterParametresWithStatusReader(String pyramidRestUrl, RestTemplate restTemplate, ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap) {
         this.pyramidRestUrl = pyramidRestUrl;
         this.restTemplate = restTemplate;
+        this.commandParametersMap = commandParametersMap;
+    }
+
+    @BeforeStep
+    private void setCurrentJobGuids(StepExecution stepExecution) {
+        String externalJobId = stepExecution.getJobExecution().getJobParameters().getString("externalJobId");
+        GetMeterRequest body = commandParametersMap
+                .get(externalJobId).getCommandParameters().getBody();
+        this.arrayOfGuids = body.getArrayOfGuids().getGuids();
+        this.dtFrom = body.getBeginDateTime();
+        this.dtTo = body.getEndDateTime();
+        this.done = false;
     }
 
 
     @Override
-    public String read() throws Exception, UnexpectedInputException, ParseException, NonTransientResourceException {
-        return null;
+    public List<String> read() throws Exception, UnexpectedInputException, ParseException, NonTransientResourceException {
+        if (!this.done) {
+            LOGGER.info("Reading the information of meterparameterswithstatus from " + this.pyramidRestUrl);
+
+            List<String> requests = new ArrayList<>();
+            this.arrayOfGuids.forEach(meterguid -> Arrays.stream(MeterParameter.values()).forEach(meterParameter -> {
+                StringBuilder builder = new StringBuilder(pyramidRestUrl);
+                builder.append(RestRequestType.METERPARAMETERSWITHSTATUS);
+                builder.append("/");
+                builder.append(meterguid);
+                builder.append("/");
+                builder.append(meterParameter.getParameterGuid());
+                builder.append("/");
+                builder.append(dtFrom);
+                builder.append("/");
+                builder.append(dtTo);
+                requests.add(builder.toString());
+            }));
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+
+            List<String> results = new ArrayList<>();
+            requests.forEach(request -> {
+                String result = restTemplate.getForEntity(request, String.class).toString();
+                results.add(result);
+            });
+
+            this.done = true;
+            return results;
+        } else {
+            return null;
+        }
+    }
+
+    @AfterStep
+    private void clearGuids() {
+        this.arrayOfGuids = new ArrayList<>();
     }
 }

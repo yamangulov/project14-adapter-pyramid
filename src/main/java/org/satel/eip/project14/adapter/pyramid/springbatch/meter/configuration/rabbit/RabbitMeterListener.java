@@ -26,6 +26,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Configuration
@@ -46,14 +49,16 @@ public class RabbitMeterListener {
     final Job getMeterJob;
     private final RabbitTemplate rabbitTemplate;
     private final ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap;
+    private final ConcurrentHashMap<String, Map<String, String>> stepsResultsMap;
 
     @Autowired
     public RabbitMeterListener(JobLauncher jobLauncher, Job getMeterJob, RabbitTemplate rabbitTemplate,
-                               ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap) {
+                               ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ConcurrentHashMap<String, Map<String, String>> stepsResultsMap) {
         this.jobLauncher = jobLauncher;
         this.getMeterJob = getMeterJob;
         this.rabbitTemplate = rabbitTemplate;
         this.commandParametersMap = commandParametersMap;
+        this.stepsResultsMap = stepsResultsMap;
     }
 
     @RabbitListener(queues = "${rabbitmq.commands.queue}")
@@ -87,6 +92,7 @@ public class RabbitMeterListener {
                 .toJobParameters();
 
         commandParametersMap.put(externalJobId, new GetMeterRequestContainer(command));
+        stepsResultsMap.put(externalJobId, new ConcurrentHashMap<>());
         jobLauncher.run(getMeterJob, jobParameters);
 
         sendGetMeterJobIsDoneMessage(externalJobId);
