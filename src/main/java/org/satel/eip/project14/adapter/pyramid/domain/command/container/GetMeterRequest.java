@@ -11,14 +11,14 @@ package org.satel.eip.project14.adapter.pyramid.domain.command.container;
 import lombok.Getter;
 import lombok.Setter;
 
-import javax.xml.datatype.XMLGregorianCalendar;
+import java.time.Instant;
 
 @Getter
 @Setter
 public class GetMeterRequest {
 
-    protected XMLGregorianCalendar beginDateTime;
-    protected XMLGregorianCalendar endDateTime;
+    protected Instant beginDateTime;
+    protected Instant endDateTime;
     protected Integer offset;
     protected Integer limit;
     protected ArrayOfGuids arrayOfGuids;

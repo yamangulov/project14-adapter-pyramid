@@ -19,22 +19,24 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestTemplate;
 
-import javax.xml.datatype.XMLGregorianCalendar;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class MeterParametresWithStatusReader implements ItemReader<List<String>> {
+public class MeterParametresWithStatusReader implements ItemReader<Map<String, List<String>>> {
     private static final Logger LOGGER = LoggerFactory.getLogger(MeterParametresWithStatusReader.class);
 
     private final String pyramidRestUrl;
     private final RestTemplate restTemplate;
     private final ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap;
     private List<String> arrayOfGuids = new ArrayList<>();
-    private XMLGregorianCalendar dtFrom;
-    private XMLGregorianCalendar dtTo;
+    private Instant dtFrom;
+    private Instant dtTo;
     private boolean done;
+    private String externalJobId;
 
     public MeterParametresWithStatusReader(String pyramidRestUrl, RestTemplate restTemplate, ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap) {
         this.pyramidRestUrl = pyramidRestUrl;
@@ -44,7 +46,7 @@ public class MeterParametresWithStatusReader implements ItemReader<List<String>>
 
     @BeforeStep
     private void setCurrentJobGuids(StepExecution stepExecution) {
-        String externalJobId = stepExecution.getJobExecution().getJobParameters().getString("externalJobId");
+        this.externalJobId = stepExecution.getJobExecution().getJobParameters().getString("externalJobId");
         GetMeterRequest body = commandParametersMap
                 .get(externalJobId).getCommandParameters().getBody();
         this.arrayOfGuids = body.getArrayOfGuids().getGuids();
@@ -55,7 +57,8 @@ public class MeterParametresWithStatusReader implements ItemReader<List<String>>
 
 
     @Override
-    public List<String> read() throws Exception, UnexpectedInputException, ParseException, NonTransientResourceException {
+    public Map<String, List<String>> read() throws UnexpectedInputException, ParseException, NonTransientResourceException {
+
         if (!this.done) {
             LOGGER.info("Reading the information of meterparameterswithstatus from " + this.pyramidRestUrl);
 
@@ -84,8 +87,12 @@ public class MeterParametresWithStatusReader implements ItemReader<List<String>>
                 results.add(result);
             });
 
+            Map<String, List<String>> wrappedResults = new ConcurrentHashMap<>();
+            wrappedResults.put(externalJobId, results);
+
             this.done = true;
-            return results;
+            LOGGER.info("End reading the information of meterparameterswithstatus from " + this.pyramidRestUrl);
+            return wrappedResults;
         } else {
             return null;
         }

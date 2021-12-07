@@ -69,7 +69,7 @@ public class RestMeterBatchConfiguration {
     // для хранения результатов промежуточных запросов к Rest API Пирамиды и передачи их между Spring Batch steps
     // writer() в таких steps пишут результаты именно сюда, и только когда все данные получены - в RabbitMQ
     @Bean("stepsResultsMap")
-    public ConcurrentHashMap<String, Map<String, String>> stepsResultsMap() {
+    public ConcurrentHashMap<String, Map<Integer, Object>> stepsResultsMap() {
         return new ConcurrentHashMap<>();
     }
 
@@ -90,11 +90,11 @@ public class RestMeterBatchConfiguration {
 
     //endpoint GET /meterparameterswithstatus/{meterguid}/{parameterguid}/{dtfrom}/{dtto}
     @Bean
-    public Step meterParametersWithStatusStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap) {
+    public Step meterParametersWithStatusStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap, ConcurrentHashMap<String, Map<Integer, Object>> stepsResultsMap) {
         return stepBuilderFactory.get("stepMeterParametersWithStatus")
-                .<List<String>, List<String>>chunk(chunkSize)
+                .<Map<String, List<String>>, Map<String, List<String>>>chunk(chunkSize)
                 .reader(new MeterParametresWithStatusReader(pyramidRestUrl, restTemplate, commandParametersMap))
-                .writer(new MeterParametresWithStatusWriter(rabbitTemplate))
+                .writer(new MeterParametresWithStatusWriter(rabbitTemplate, stepsResultsMap, commandParametersMap))
                 .build();
     }
 
