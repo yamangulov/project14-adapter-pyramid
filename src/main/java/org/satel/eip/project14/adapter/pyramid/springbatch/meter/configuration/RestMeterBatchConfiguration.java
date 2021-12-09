@@ -90,11 +90,11 @@ public class RestMeterBatchConfiguration {
 
     //endpoint GET /meterparameterswithstatus/{meterguid}/{parameterguid}/{dtfrom}/{dtto}
     @Bean
-    public Step meterParametersWithStatusStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap, ConcurrentHashMap<String, Map<Integer, Object>> stepsResultsMap) {
+    public Step meterParametersWithStatusStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap, ConcurrentHashMap<String, Object> stepsResultsMap) {
         return stepBuilderFactory.get("stepMeterParametersWithStatus")
                 .<Map<String, List<String>>, Map<String, List<String>>>chunk(chunkSize)
                 .reader(new MeterParametresWithStatusReader(pyramidRestUrl, restTemplate, commandParametersMap))
-                .writer(new MeterParametresWithStatusWriter(rabbitTemplate, stepsResultsMap, commandParametersMap))
+                .writer(new MeterParametresWithStatusWriter(stepsResultsMap))
                 .build();
     }
 

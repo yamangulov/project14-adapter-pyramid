@@ -26,8 +26,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -48,12 +46,12 @@ public class RabbitMeterListener {
     final JobLauncher jobLauncher;
     final Job getMeterJob;
     private final RabbitTemplate rabbitTemplate;
-    private final ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap;
-    private final ConcurrentHashMap<String, Map<String, String>> stepsResultsMap;
+    private final ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap;
+    private final ConcurrentHashMap<String, Object> stepsResultsMap;
 
     @Autowired
     public RabbitMeterListener(JobLauncher jobLauncher, Job getMeterJob, RabbitTemplate rabbitTemplate,
-                               ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ConcurrentHashMap<String, Map<String, String>> stepsResultsMap) {
+                               ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap, ConcurrentHashMap<String, Object> stepsResultsMap) {
         this.jobLauncher = jobLauncher;
         this.getMeterJob = getMeterJob;
         this.rabbitTemplate = rabbitTemplate;
@@ -62,7 +60,7 @@ public class RabbitMeterListener {
     }
 
     @RabbitListener(queues = "${rabbitmq.commands.queue}")
-    public void listenSoapPartnersCommands(String in) throws JobInstanceAlreadyCompleteException,
+    public void listenPyramidCommands(String in) throws JobInstanceAlreadyCompleteException,
             JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException, JsonProcessingException {
 
         ObjectMapper mapper = new ObjectMapper();

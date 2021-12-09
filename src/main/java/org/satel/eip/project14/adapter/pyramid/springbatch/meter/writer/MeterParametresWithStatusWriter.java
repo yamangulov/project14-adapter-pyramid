@@ -16,34 +16,26 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class MeterParametresWithStatusWriter implements ItemWriter<Map<String, List<String>>> {
     private static final Logger LOGGER = LoggerFactory.getLogger(MeterParametresWithStatusWriter.class);
-    private final RabbitTemplate rabbitTemplate;
-    private final ConcurrentHashMap<String, Map<Integer, Object>> stepsResultsMap;
-    private final ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap;
+    private final ConcurrentHashMap<String, Object> stepsResultsMap;
 
-    public MeterParametresWithStatusWriter(RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, Map<Integer, Object>> stepsResultsMap, ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap) {
-        this.rabbitTemplate = rabbitTemplate;
+    public MeterParametresWithStatusWriter(ConcurrentHashMap<String, Object> stepsResultsMap) {
         this.stepsResultsMap = stepsResultsMap;
-        this.commandParametersMap = commandParametersMap;
     }
 
     @Override
-    public void write(List<? extends Map<String, List<String>>> items) throws Exception {
+    public void write(List<? extends Map<String, List<String>>> items) {
         LOGGER.info("Writing MeterReading on step1 to map for saving");
-        String key = items.get(0).keySet().stream().findFirst().orElseThrow().concat("_step1");
-        // здесь мы пока еще не посылаем объекты в rabbit, а сохраняем его для последующего обогащения
-        Map<Integer, Object> map = new ConcurrentHashMap<>();
+        //"{externalJobId}_MeterReading" пишем в ключ мапы, чтобы различать по ключу в следующих шагах
+        // значения только для своего Job и только для своего step
+        String key = items.get(0).keySet().stream().findFirst().orElseThrow().concat("_MeterReading");
+        // здесь мы пока еще не посылаем объекты в rabbit, а сохраняем их для последующего обогащения
         for (List<String> strings : items.get(0).values()) {
-            int k = 0;
             for (String o : strings) {
                 ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
                 MeterReading meterReading = mapper.convertValue(o, MeterReading.class);
-                map.put(k, meterReading);
-                k++;
+                stepsResultsMap.put(key, meterReading);
             }
         }
-        stepsResultsMap.put(key, map);
-
         LOGGER.info("End writing MeterReading on step1 to map for saving");
-
     }
 }
