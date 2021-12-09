@@ -83,7 +83,7 @@ public class MeterParametresWithStatusReader implements ItemReader<Map<String, L
 
             List<String> results = new ArrayList<>();
             requests.forEach(request -> {
-                String result = restTemplate.getForEntity(request, String.class).toString();
+                String result = restTemplate.getForEntity(request, String.class, entity).toString();
                 results.add(result);
             });
 
