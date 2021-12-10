@@ -15,6 +15,8 @@ import org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer.MeterPar
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer.MeterPointWriter;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer.MeterWriter;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer.ReadingWriter;
+import org.satel.eip.project14.data.model.pyramid.EndDeviceEvent;
+import org.satel.eip.project14.data.model.pyramid.Reading;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.batch.core.Job;
@@ -82,9 +84,10 @@ public class RestMeterBatchConfiguration {
                 .start(meterParametersWithStatusStep)
                 .next(meterEventsStep)
                 .next(meterEventsDetailStep)
-                .next(meterStep)
-                .next(meterPointStep)
-                .next(readingStep)
+                // ФС 14.5 распорядились пока не реализовывать
+                //.next(meterStep)
+                //.next(meterPointStep)
+                //.next(readingStep)
                 .build();
     }
 
@@ -94,7 +97,7 @@ public class RestMeterBatchConfiguration {
         ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap,
         ConcurrentHashMap<String, Object> stepsResultsMap) {
         return stepBuilderFactory.get("stepMeterParametersWithStatus")
-                .<Map<String, List<String>>, Map<String, List<String>>>chunk(chunkSize)
+                .<Map<String, Map<String, Map<String, List<Reading>>>>, Map<String, Map<String, Map<String, List<Reading>>>>>chunk(chunkSize)
                 .reader(new MeterParametresWithStatusReader(pyramidRestUrl, restTemplate, commandParametersMap))
                 .writer(new MeterParametresWithStatusWriter(stepsResultsMap))
                 .build();
@@ -106,9 +109,9 @@ public class RestMeterBatchConfiguration {
         ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap,
         ConcurrentHashMap<String, Object> stepsResultsMap) {
         return stepBuilderFactory.get("stepMeterEvents")
-                .<String, String>chunk(chunkSize)
+                .<Map<String, Map<String, List<EndDeviceEvent>>>, Map<String, Map<String, List<EndDeviceEvent>>>>chunk(chunkSize)
                 .reader(new MeterEventsReader(pyramidRestUrl, restTemplate, commandParametersMap))
-                .writer(new MeterEventsWriter(rabbitTemplate))
+                .writer(new MeterEventsWriter(rabbitTemplate, stepsResultsMap))
                 .build();
     }
 
@@ -122,6 +125,7 @@ public class RestMeterBatchConfiguration {
                 .build();
     }
 
+    // ФС 14.5 распорядились пока не реализовывать
     //endpoint GET /meter/{meterguid}/
     @Bean
     public Step meterStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate) {
@@ -132,6 +136,7 @@ public class RestMeterBatchConfiguration {
                 .build();
     }
 
+    // ФС 14.5 распорядились пока не реализовывать
     //endpoint GET /object/{objectGuid} для получения тарифа ТУ
     @Bean
     public Step meterPointStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate) {
@@ -142,6 +147,7 @@ public class RestMeterBatchConfiguration {
                 .build();
     }
 
+    // ФС 14.5 распорядились пока не реализовывать
     //endpoint GET /meterpointparameterswithstatus/{meterpointguid}/{parameterguid}/{dtfrom}/{dtto}
     @Bean
     public Step readingStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate) {

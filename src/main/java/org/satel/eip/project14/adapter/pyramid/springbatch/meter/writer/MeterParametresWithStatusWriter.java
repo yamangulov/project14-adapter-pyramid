@@ -1,20 +1,15 @@
 package org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandParametersContainer;
-import org.satel.eip.project14.adapter.pyramid.domain.command.entity.GetMeterRequestCommand;
-import org.satel.eip.project14.data.model.pyramid.MeterReading;
+import org.satel.eip.project14.data.model.pyramid.Reading;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.batch.item.ItemWriter;
 
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class MeterParametresWithStatusWriter implements ItemWriter<Map<String, List<String>>> {
+public class MeterParametresWithStatusWriter implements ItemWriter<Map<String, Map<String, Map<String, List<Reading>>>>> {
     private static final Logger LOGGER = LoggerFactory.getLogger(MeterParametresWithStatusWriter.class);
     private final ConcurrentHashMap<String, Object> stepsResultsMap;
 
@@ -23,19 +18,31 @@ public class MeterParametresWithStatusWriter implements ItemWriter<Map<String, L
     }
 
     @Override
-    public void write(List<? extends Map<String, List<String>>> items) {
-        LOGGER.info("Writing MeterReading on step1 to map for saving");
-        //"{externalJobId}_MeterReading" пишем в ключ мапы, чтобы различать по ключу в следующих шагах
-        // значения только для своего Job и только для своего step
-        String key = items.get(0).keySet().stream().findFirst().orElseThrow().concat("_MeterReading");
-        // здесь мы пока еще не посылаем объекты в rabbit, а сохраняем их для последующего обогащения
-        for (List<String> strings : items.get(0).values()) {
-            for (String o : strings) {
-                ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
-                MeterReading meterReading = mapper.convertValue(o, MeterReading.class);
-                stepsResultsMap.put(key, meterReading);
-            }
-        }
-        LOGGER.info("End writing MeterReading on step1 to map for saving");
+    public void write(List<? extends Map<String, Map<String, Map<String, List<Reading>>>>> items) {
+        LOGGER.info("Writing Reading on step1 to map for saving");
+
+        String key = items.get(0).keySet().stream().findFirst().orElseThrow();
+        Map<String, Map<String, List<Reading>>> value = new ConcurrentHashMap<>();
+        items.forEach(item -> {
+            item.values().forEach(levelOneValue -> {
+                levelOneValue.forEach((meterguid, levelTwoValue) -> {
+                    levelTwoValue.forEach((parameter, readings) -> {
+                        if (value.containsKey(meterguid)) {
+                            if (value.get(meterguid).containsKey(parameter)) {
+                                value.get(meterguid).get(parameter).addAll(readings);
+                            } else {
+                                value.get(meterguid).put(parameter, readings);
+                            }
+                        } else {
+                            Map<String, List<Reading>> readingsByParams = new ConcurrentHashMap<>();
+                            readingsByParams.put(parameter, readings);
+                            value.put(meterguid, readingsByParams);
+                        }
+                    });
+                });
+            });
+        });
+        stepsResultsMap.put(key, value);
+        LOGGER.info("End writing Reading on step1 to map for saving");
     }
 }

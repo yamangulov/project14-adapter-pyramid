@@ -33,7 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class MeterEventsReader implements ItemReader<String> {
+public class MeterEventsReader implements ItemReader<Map<String, Map<String, List<EndDeviceEvent>>>> {
     private static final Logger LOGGER = LoggerFactory.getLogger(MeterEventsReader.class);
 
     private final ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap;
@@ -42,8 +42,8 @@ public class MeterEventsReader implements ItemReader<String> {
     private List<String> arrayOfGuids = new ArrayList<>();
     private Instant dtFrom;
     private Instant dtTo;
-    private boolean done;
     private String externalJobId;
+    private boolean done;
 
     public MeterEventsReader(String pyramidRestUrl, RestTemplate restTemplate, ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap) {
         this.commandParametersMap = commandParametersMap;
@@ -63,44 +63,54 @@ public class MeterEventsReader implements ItemReader<String> {
     }
 
     @Override
-    public String read() throws UnexpectedInputException, ParseException, NonTransientResourceException, Exception {
+    public Map<String, Map<String, List<EndDeviceEvent>>> read() throws UnexpectedInputException, ParseException, NonTransientResourceException, Exception {
 
-        Map<String, String> requests = new ConcurrentHashMap<>();
-        this.arrayOfGuids.forEach(meterguid -> {
-            StringBuilder builder = new StringBuilder(pyramidRestUrl);
-            builder.append(RestRequestType.METEREVENTS);
-            builder.append("/");
-            builder.append(meterguid);
-            builder.append("/");
-            builder.append(dtFrom);
-            builder.append("/");
-            builder.append(dtTo);
-            requests.put(meterguid, builder.toString());
-        });
+        if (!this.done) {
+            LOGGER.info("Reading the information of meterevents from " + this.pyramidRestUrl);
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        HttpEntity<String> entity = new HttpEntity<>(headers);
+            Map<String, String> requests = new ConcurrentHashMap<>();
+            this.arrayOfGuids.forEach(meterguid -> {
+                StringBuilder builder = new StringBuilder(pyramidRestUrl);
+                builder.append(RestRequestType.METEREVENTS);
+                builder.append("/");
+                builder.append(meterguid);
+                builder.append("/");
+                builder.append(dtFrom);
+                builder.append("/");
+                builder.append(dtTo);
+                requests.put(meterguid, builder.toString());
+            });
 
-        Map<String, List<EndDeviceEvent>> results = new ConcurrentHashMap<>();
-        // для каждого ПУ meterguid собственный запрос в рест апи
-        requests.forEach((meterguid, request) -> {
-            String result = restTemplate.getForEntity(request, String.class).toString();
-            ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
-            String resultInner = mapper.convertValue(result, StringRootDataWrapper.class).getJsonString();
-            List<EndDeviceEvent> resultList = null;
-            try {
-                resultList = Arrays.asList(mapper.readValue(resultInner, EndDeviceEvent[].class));
-            } catch (JsonProcessingException e) {
-                e.printStackTrace();
-            }
-            results.put(meterguid, resultList);
-        });
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<String> entity = new HttpEntity<>(headers);
 
-        //TODO сделать второй запрос в рест апи для получения по каждому ПУ для каждого из полученных для него
-        // EndDeviceEvent детальное описание события GET /object/{objectGuid} и обогатить их полученными
-        // EndDeviceEventDetail, затем вернуть обогащенные объекты из ридера
-        return null;
+            Map<String, List<EndDeviceEvent>> results = new ConcurrentHashMap<>();
+            // для каждого ПУ meterguid собственный запрос в рест апи
+            requests.forEach((meterguid, request) -> {
+                String result = restTemplate.getForEntity(request, String.class).toString();
+                ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+                String resultInner = mapper.convertValue(result, StringRootDataWrapper.class).getJsonString();
+                List<EndDeviceEvent> resultList = null;
+                try {
+                    resultList = Arrays.asList(mapper.readValue(resultInner, EndDeviceEvent[].class));
+                } catch (JsonProcessingException e) {
+                    LOGGER.error("Error on mapping of received data into EndDeviceEvent objects\n {}", e.getMessage());
+                }
+                results.put(meterguid, resultList);
+            });
+
+            Map<String, Map<String, List<EndDeviceEvent>>> wrapedResults = new ConcurrentHashMap<>();
+            //"{externalJobId}_EndDeviceEvent" пишем в ключ мапы, чтобы различать по ключу в следующих шагах
+            // значения только для своего Job и только для своего step
+            wrapedResults.put(externalJobId.concat("_EndDeviceEvent"), results);
+            this.done = true;
+            LOGGER.info("End reading the information of meterevents from " + this.pyramidRestUrl);
+            return wrapedResults;
+        } else {
+            return null;
+        }
+
     }
 
     @AfterStep

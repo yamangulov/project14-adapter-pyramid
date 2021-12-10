@@ -12,6 +12,9 @@ public class MeterEventsDetailReader implements ItemReader<String> {
 
     @Override
     public String read() throws Exception, UnexpectedInputException, ParseException, NonTransientResourceException {
+        //TODO сделать второй запрос в рест апи для получения по каждому ПУ для каждого из полученных для него
+        // EndDeviceEvent детальное описание события GET /object/{objectGuid} и обогатить их полученными
+        // EndDeviceEventDetail, затем вернуть обогащенные объекты
         return null;
     }
 }
