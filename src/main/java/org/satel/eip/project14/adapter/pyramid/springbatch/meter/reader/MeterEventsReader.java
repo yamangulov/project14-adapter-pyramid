@@ -88,7 +88,7 @@ public class MeterEventsReader implements ItemReader<Map<String, Map<String, Lis
             Map<String, List<EndDeviceEvent>> results = new ConcurrentHashMap<>();
             // для каждого ПУ meterguid собственный запрос в рест апи
             requests.forEach((meterguid, request) -> {
-                String result = restTemplate.getForEntity(request, String.class).toString();
+                String result = restTemplate.getForEntity(request, String.class, entity).toString();
                 ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
                 String resultInner = mapper.convertValue(result, StringRootDataWrapper.class).getJsonString();
                 List<EndDeviceEvent> resultList = null;

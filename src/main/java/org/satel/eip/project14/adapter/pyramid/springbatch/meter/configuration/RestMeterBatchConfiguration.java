@@ -117,10 +117,10 @@ public class RestMeterBatchConfiguration {
 
     //endpoint GET /object/{objectGuid} для событий приборов учета
     @Bean
-    public Step meterEventsDetailStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate) {
+    public Step meterEventsDetailStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap, ConcurrentHashMap<String, Object> stepsResultsMap) {
         return stepBuilderFactory.get("stepMeterEventsDetail")
-                .<String, String>chunk(chunkSize)
-                .reader(new MeterEventsDetailReader(pyramidRestUrl, restTemplate))
+                .<Map<String, List<EndDeviceEvent>>, Map<String, List<EndDeviceEvent>>>chunk(chunkSize)
+                .reader(new MeterEventsDetailReader(pyramidRestUrl, restTemplate, commandParametersMap, stepsResultsMap))
                 .writer(new MeterEventsDetailWriter(rabbitTemplate))
                 .build();
     }
