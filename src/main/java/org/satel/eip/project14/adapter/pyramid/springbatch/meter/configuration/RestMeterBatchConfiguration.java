@@ -119,9 +119,9 @@ public class RestMeterBatchConfiguration {
     @Bean
     public Step meterEventsDetailStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap, ConcurrentHashMap<String, Object> stepsResultsMap) {
         return stepBuilderFactory.get("stepMeterEventsDetail")
-                .<Map<String, List<EndDeviceEvent>>, Map<String, List<EndDeviceEvent>>>chunk(chunkSize)
+                .<Map<String, Map<String, List<EndDeviceEvent>>>, Map<String, Map<String, List<EndDeviceEvent>>>>chunk(chunkSize)
                 .reader(new MeterEventsDetailReader(pyramidRestUrl, restTemplate, commandParametersMap, stepsResultsMap))
-                .writer(new MeterEventsDetailWriter(rabbitTemplate))
+                .writer(new MeterEventsDetailWriter(commandParametersMap, rabbitTemplate, stepsResultsMap))
                 .build();
     }
 

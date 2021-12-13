@@ -7,6 +7,7 @@ import org.satel.eip.project14.adapter.pyramid.domain.command.container.GetMeter
 import org.satel.eip.project14.adapter.pyramid.domain.command.entity.GetMeterRequestCommand;
 import org.satel.eip.project14.data.model.pyramid.EndDeviceEvent;
 import org.satel.eip.project14.data.model.pyramid.EndDeviceEventDetail;
+import org.satel.eip.project14.data.model.pyramid.Reading;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.batch.core.StepExecution;
@@ -24,7 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class MeterEventsDetailReader implements ItemReader<Map<String, List<EndDeviceEvent>>> {
+public class MeterEventsDetailReader implements ItemReader<Map<String, Map<String, List<EndDeviceEvent>>>> {
     private static final Logger LOGGER = LoggerFactory.getLogger(MeterEventsDetailReader.class);
 
     private final ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap;
@@ -49,7 +50,7 @@ public class MeterEventsDetailReader implements ItemReader<Map<String, List<EndD
 
     @Override
     @SuppressWarnings("unchecked")
-    public Map<String, List<EndDeviceEvent>> read() throws UnexpectedInputException, ParseException, NonTransientResourceException, Exception {
+    public Map<String, Map<String, List<EndDeviceEvent>>> read() throws UnexpectedInputException, ParseException, NonTransientResourceException, Exception {
         if (!this.done) {
             LOGGER.info("Reading EndDeviceEventDetail for each meterevent from " + this.pyramidRestUrl);
             Map<String, List<EndDeviceEvent>> endDeviceEventsByMeterGuids = (Map<String, List<EndDeviceEvent>>) stepsResultsMap.get(externalJobId.concat("_EndDeviceEvent"));
@@ -67,8 +68,11 @@ public class MeterEventsDetailReader implements ItemReader<Map<String, List<EndD
                     endDeviceEvent.setDetails(result);
                 });
             });
+            Map<String, Map<String, List<EndDeviceEvent>>> wrappedResults = new ConcurrentHashMap<>();
+            wrappedResults.put(externalJobId, endDeviceEventsByMeterGuids);
+            this.done = true;
             LOGGER.info("End reading EndDeviceEventDetail for each meterevent from " + this.pyramidRestUrl);
-            return endDeviceEventsByMeterGuids;
+            return wrappedResults;
         } else {
             return null;
         }
