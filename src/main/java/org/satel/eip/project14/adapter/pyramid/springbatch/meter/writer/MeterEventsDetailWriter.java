@@ -1,5 +1,7 @@
 package org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandParametersContainer;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.GetMeterRequest;
 import org.satel.eip.project14.adapter.pyramid.domain.command.entity.GetMeterRequestCommand;
@@ -96,8 +98,19 @@ public class MeterEventsDetailWriter implements ItemWriter<Map<String, Map<Strin
 
         LOGGER.info("Sending object into RabbitMQ");
 
-        //TODO в цикле по wrappedMeterReadings сериализовать каждый из MeterReading в строку и отправить в RabbitMQ
-        // например rabbitTemplate.convertAndSend(this.exchange, this.routingKey, result);
+        List<String> serializedObjects = new ArrayList<>();
+        ObjectMapper mapper = new ObjectMapper();
+        wrappedMeterReadings.forEach(wrappedReading -> {
+            try {
+                serializedObjects.add(mapper.writeValueAsString(wrappedReading));
+            } catch (JsonProcessingException e) {
+                LOGGER.error("Error on serializing object {}:\n {}", wrappedReading, e.getMessage());
+            }
+        });
+
+        serializedObjects.forEach(jsonString -> {
+            rabbitTemplate.convertAndSend(this.exchange, this.routingKey, jsonString);
+        });
 
         LOGGER.info("Sending object into RabbitMQ");
     }
