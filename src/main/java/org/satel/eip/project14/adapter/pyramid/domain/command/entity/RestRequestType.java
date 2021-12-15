@@ -6,11 +6,8 @@ import lombok.ToString;
 @Getter
 @ToString
 public enum RestRequestType {
-    METERPARAMETERSWITHSTATUS("meterparameterswithstatus/"),
     METEREVENTS("meterevents/"),
-    OBJECT("object/"),
-    METER("meter/"),
-    METERPOINTPARAMETERSWITHSTATUS("meterpointparameterswithstatus/");
+    METERPOINTSBYMETERPARAMETERSBATCH("meterpointsbymeterparametersbatch");
     private final String type;
 
     RestRequestType(String type) {

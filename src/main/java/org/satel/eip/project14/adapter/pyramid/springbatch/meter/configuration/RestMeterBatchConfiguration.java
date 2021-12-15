@@ -3,18 +3,10 @@ package org.satel.eip.project14.adapter.pyramid.springbatch.meter.configuration;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandParametersContainer;
 import org.satel.eip.project14.adapter.pyramid.domain.command.entity.GetMeterRequestCommand;
 import org.satel.eip.project14.adapter.pyramid.springbatch.JobCompletionNotificationListener;
-import org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader.MeterEventsDetailReader;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader.MeterEventsReader;
-import org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader.MeterParametresWithStatusReader;
-import org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader.MeterPointReader;
-import org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader.MeterReader;
-import org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader.ReadingReader;
-import org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer.MeterEventsDetailWriter;
+import org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader.MeterPointsByMeterParametersBatchReader;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer.MeterEventsWriter;
-import org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer.MeterParametresWithStatusWriter;
-import org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer.MeterPointWriter;
-import org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer.MeterWriter;
-import org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer.ReadingWriter;
+import org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer.MeterPointsByMeterParametersBatchWriter;
 import org.satel.eip.project14.data.model.pyramid.EndDeviceEvent;
 import org.satel.eip.project14.data.model.pyramid.Reading;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
@@ -32,7 +24,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Configuration
@@ -68,38 +59,24 @@ public class RestMeterBatchConfiguration {
         return new ConcurrentHashMap<>();
     }
 
-    // для хранения результатов промежуточных запросов к Rest API Пирамиды и передачи их между Spring Batch steps
-    // writer() в таких steps пишут результаты именно сюда, и только когда все данные получены - в RabbitMQ
-    @Bean("stepsResultsMap")
-    public ConcurrentHashMap<String, Map<Integer, Object>> stepsResultsMap() {
-        return new ConcurrentHashMap<>();
-    }
-
     @Bean
-    public Job getMeterJob(Step meterParametersWithStatusStep, Step meterEventsStep, Step meterEventsDetailStep,
-                           Step meterStep, Step meterPointStep, Step readingStep) {
+    public Job getMeterJob(Step meterPointsByMeterParametersBatchStep, Step meterEventsStep) {
         return jobBuilderFactory.get("pyramidJob")
                 .incrementer(new RunIdIncrementer())
                 .listener(new JobCompletionNotificationListener())
-                .start(meterParametersWithStatusStep)
+                .start(meterPointsByMeterParametersBatchStep)
                 .next(meterEventsStep)
-                .next(meterEventsDetailStep)
-                // ФС 14.5 распорядились пока не реализовывать
-                //.next(meterStep)
-                //.next(meterPointStep)
-                //.next(readingStep)
                 .build();
     }
 
-    //endpoint GET /meterparameterswithstatus/{meterguid}/{parameterguid}/{dtfrom}/{dtto}
+    //endpoint GET /meterpointsbymeterparametersbatch/{parameterguid}/{dtfrom}/{dtto}
+    // + extra body in GET request with {meterguid} list with comma separator in it
     @Bean
-    public Step meterParametersWithStatusStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate,
-        ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap,
-        ConcurrentHashMap<String, Object> stepsResultsMap) {
-        return stepBuilderFactory.get("stepMeterParametersWithStatus")
-                .<Map<String, Map<String, Map<String, List<Reading>>>>, Map<String, Map<String, Map<String, List<Reading>>>>>chunk(chunkSize)
-                .reader(new MeterParametresWithStatusReader(pyramidRestUrl, restTemplate, commandParametersMap))
-                .writer(new MeterParametresWithStatusWriter(stepsResultsMap))
+    public Step meterPointsByMeterParametersBatchStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap) {
+        return stepBuilderFactory.get("stepMeterPointsByMeterParametersBatchStep")
+                .<List<Reading>, List<Reading>> chunk(chunkSize)
+                .reader(new MeterPointsByMeterParametersBatchReader(pyramidRestUrl, restTemplate, commandParametersMap))
+                .writer(new MeterPointsByMeterParametersBatchWriter(rabbitTemplate))
                 .build();
     }
 
@@ -109,52 +86,10 @@ public class RestMeterBatchConfiguration {
         ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap,
         ConcurrentHashMap<String, Object> stepsResultsMap) {
         return stepBuilderFactory.get("stepMeterEvents")
-                .<Map<String, Map<String, List<EndDeviceEvent>>>, Map<String, Map<String, List<EndDeviceEvent>>>>chunk(chunkSize)
+                .<List<EndDeviceEvent>, List<EndDeviceEvent>>chunk(chunkSize)
                 .reader(new MeterEventsReader(pyramidRestUrl, restTemplate, commandParametersMap))
-                .writer(new MeterEventsWriter(rabbitTemplate, stepsResultsMap))
+                .writer(new MeterEventsWriter(rabbitTemplate))
                 .build();
     }
 
-    //endpoint GET /object/{objectGuid} для событий приборов учета
-    @Bean
-    public Step meterEventsDetailStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap, ConcurrentHashMap<String, Object> stepsResultsMap) {
-        return stepBuilderFactory.get("stepMeterEventsDetail")
-                .<Map<String, Map<String, List<EndDeviceEvent>>>, Map<String, Map<String, List<EndDeviceEvent>>>>chunk(chunkSize)
-                .reader(new MeterEventsDetailReader(pyramidRestUrl, restTemplate, commandParametersMap, stepsResultsMap))
-                .writer(new MeterEventsDetailWriter(commandParametersMap, rabbitTemplate, stepsResultsMap))
-                .build();
-    }
-
-    // ФС 14.5 распорядились пока не реализовывать
-    //endpoint GET /meter/{meterguid}/
-    @Bean
-    public Step meterStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate) {
-        return stepBuilderFactory.get("stepMeter")
-                .<String, String>chunk(chunkSize)
-                .reader(new MeterReader(pyramidRestUrl, restTemplate))
-                .writer(new MeterWriter(rabbitTemplate))
-                .build();
-    }
-
-    // ФС 14.5 распорядились пока не реализовывать
-    //endpoint GET /object/{objectGuid} для получения тарифа ТУ
-    @Bean
-    public Step meterPointStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate) {
-        return stepBuilderFactory.get("stepMeterPoint")
-                .<String, String>chunk(chunkSize)
-                .reader(new MeterPointReader(pyramidRestUrl, restTemplate))
-                .writer(new MeterPointWriter(rabbitTemplate))
-                .build();
-    }
-
-    // ФС 14.5 распорядились пока не реализовывать
-    //endpoint GET /meterpointparameterswithstatus/{meterpointguid}/{parameterguid}/{dtfrom}/{dtto}
-    @Bean
-    public Step readingStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate) {
-        return stepBuilderFactory.get("stepReading")
-                .<String, String>chunk(chunkSize)
-                .reader(new ReadingReader(pyramidRestUrl, restTemplate))
-                .writer(new ReadingWriter(rabbitTemplate))
-                .build();
-    }
 }

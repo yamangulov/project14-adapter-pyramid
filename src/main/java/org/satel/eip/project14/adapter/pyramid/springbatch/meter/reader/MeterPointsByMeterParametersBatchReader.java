@@ -7,8 +7,8 @@ import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandP
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.GetMeterRequest;
 import org.satel.eip.project14.adapter.pyramid.domain.command.entity.GetMeterRequestCommand;
 import org.satel.eip.project14.adapter.pyramid.domain.command.entity.RestRequestType;
-import org.satel.eip.project14.data.model.pyramid.EndDeviceEvent;
-import org.satel.eip.project14.data.model.pyramid.wrapper.StringRootDataWrapper;
+import org.satel.eip.project14.data.model.pyramid.MeterParameter;
+import org.satel.eip.project14.data.model.pyramid.Reading;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.batch.core.StepExecution;
@@ -27,24 +27,23 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class MeterEventsReader implements ItemReader<List<EndDeviceEvent>> {
-    private static final Logger LOGGER = LoggerFactory.getLogger(MeterEventsReader.class);
+public class MeterPointsByMeterParametersBatchReader implements ItemReader<List<Reading>> {
+    private static final Logger LOGGER = LoggerFactory.getLogger(MeterPointsByMeterParametersBatchReader.class);
 
-    private final ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap;
     private final String pyramidRestUrl;
     private final RestTemplate restTemplate;
-    private List<String> arrayOfGuids = new ArrayList<>();
+    private final ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap;
+    private String meterGuids;
     private Instant dtFrom;
     private Instant dtTo;
     private boolean done;
 
-    public MeterEventsReader(String pyramidRestUrl, RestTemplate restTemplate, ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap) {
-        this.commandParametersMap = commandParametersMap;
+    public MeterPointsByMeterParametersBatchReader(String pyramidRestUrl, RestTemplate restTemplate, ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap) {
         this.pyramidRestUrl = pyramidRestUrl;
         this.restTemplate = restTemplate;
+        this.commandParametersMap = commandParametersMap;
     }
 
     @BeforeStep
@@ -52,59 +51,56 @@ public class MeterEventsReader implements ItemReader<List<EndDeviceEvent>> {
         String externalJobId = stepExecution.getJobExecution().getJobParameters().getString("externalJobId");
         GetMeterRequest body = commandParametersMap
                 .get(externalJobId).getCommandParameters().getBody();
-        this.arrayOfGuids = body.getArrayOfGuids().getGuids();
+        this.meterGuids = String.join(",", body.getArrayOfGuids().getGuids());
         this.dtFrom = body.getBeginDateTime();
         this.dtTo = body.getEndDateTime();
         this.done = false;
     }
 
     @Override
-    public List<EndDeviceEvent> read() throws UnexpectedInputException, ParseException, NonTransientResourceException {
-
+    public List<Reading> read() throws UnexpectedInputException, ParseException, NonTransientResourceException {
         if (!this.done) {
-            LOGGER.info("Reading the information of meterevents from " + this.pyramidRestUrl);
+            LOGGER.info("Reading the information of meterpointsbymeterparametersbatch from " + this.pyramidRestUrl);
 
-            Map<String, String> requestsByMeterGuids = new ConcurrentHashMap<>();
-            this.arrayOfGuids.forEach(meterGuid -> {
+            Map<String, String> requestsByParameters = new ConcurrentHashMap<>();
+            Arrays.stream((MeterParameter.values())).forEach(meterParameter -> {
+                String meterParameterGuid = meterParameter.getParameterGuid();
                 StringBuilder builder = new StringBuilder(pyramidRestUrl);
-                builder.append(RestRequestType.METEREVENTS);
+                builder.append(RestRequestType.METERPOINTSBYMETERPARAMETERSBATCH);
                 builder.append("/");
-                builder.append(meterGuid);
+                builder.append(meterParameterGuid);
                 builder.append("/");
                 builder.append(dtFrom);
                 builder.append("/");
                 builder.append(dtTo);
-                requestsByMeterGuids.put(meterGuid, builder.toString());
+                String reqString = builder.toString();
+                requestsByParameters.put(meterParameterGuid, reqString);
             });
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<String> entity = new HttpEntity<>(headers);
+            //meterGuids from commandParametersMap pass as body into custom GET request
+            HttpEntity<String> entity = new HttpEntity<>(meterGuids, headers);
 
-            List<EndDeviceEvent> results = new ArrayList<>();
-            // для каждого ПУ meterguid собственный запрос в рест апи
-            requestsByMeterGuids.forEach((meterGuid, request) -> {
-                String result = restTemplate.getForEntity(request, String.class, entity).toString();
+            List<Reading> results = new ArrayList<>();
+            requestsByParameters.forEach((meterParameterGuid, reqString) -> {
                 ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
-                String resultInner = mapper.convertValue(result, StringRootDataWrapper.class).getJsonString();
+                String resultInner = restTemplate.getForObject(reqString, String.class, entity);
                 try {
-                    List<EndDeviceEvent> resultList = Arrays.asList(mapper.readValue(resultInner, EndDeviceEvent[].class));
+                    List<Reading> resultList = Arrays.asList(mapper.readValue(resultInner, Reading[].class));
                     resultList.forEach(reading -> {
                         reading.setReceivedDate(Instant.now());
-                        reading.setMeterGuid(UUID.fromString(meterGuid));
                     });
                     results.addAll(resultList);
                 } catch (JsonProcessingException e) {
-                    LOGGER.error("Error on mapping of received data into EndDeviceEvent objects\n {}", e.getMessage());
+                    LOGGER.error("Error on mapping of received data into Reading objects\n {}", e.getMessage());
                 }
             });
-
             this.done = true;
-            LOGGER.info("End reading the information of meterevents from " + this.pyramidRestUrl);
+            LOGGER.info("End reading the information of meterpointsbymeterparametersbatch from " + this.pyramidRestUrl);
             return results;
         } else {
             return null;
         }
-
     }
 }

@@ -1,6 +1,6 @@
 package org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer;
 
-import org.satel.eip.project14.data.model.pyramid.EndDeviceEvent;
+import org.satel.eip.project14.data.model.pyramid.Reading;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -11,14 +11,14 @@ import org.springframework.batch.item.ItemWriter;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MeterEventsWriter implements ItemWriter<List<EndDeviceEvent>> {
-    private static final Logger LOGGER = LoggerFactory.getLogger(MeterEventsWriter.class);
+public class MeterPointsByMeterParametersBatchWriter implements ItemWriter<List<Reading>> {
+    private static final Logger LOGGER = LoggerFactory.getLogger(MeterPointsByMeterParametersBatchWriter.class);
 
     private final RabbitTemplate rabbitTemplate;
     private String exchange;
     private String routingKey;
 
-    public MeterEventsWriter(RabbitTemplate rabbitTemplate) {
+    public MeterPointsByMeterParametersBatchWriter(RabbitTemplate rabbitTemplate) {
         this.rabbitTemplate = rabbitTemplate;
     }
 
@@ -29,16 +29,15 @@ public class MeterEventsWriter implements ItemWriter<List<EndDeviceEvent>> {
     }
 
     @Override
-    public void write(List<? extends List<EndDeviceEvent>> items) {
-        LOGGER.info("Writing EndDeviceEvents on step2 into RabbitMQ");
+    public void write(List<? extends List<Reading>> items) throws Exception {
+        LOGGER.info("Writing Reading on step1 into RabbitMQ");
 
-        List<EndDeviceEvent> readings = new ArrayList<>();
+        List<Reading> readings = new ArrayList<>();
         items.forEach(readings::addAll);
         readings.forEach(reading -> {
             rabbitTemplate.convertAndSend(this.exchange, this.routingKey, reading);
         });
 
-        LOGGER.info("End writing EndDeviceEvents on step2 into RabbitMQ");
+        LOGGER.info("End writing Reading on step1 into RabbitMQ");
     }
-
 }
