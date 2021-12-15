@@ -33,7 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MeterEventsReader implements ItemReader<List<EndDeviceEvent>> {
     private static final Logger LOGGER = LoggerFactory.getLogger(MeterEventsReader.class);
 
-    private final ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap;
+    private final ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap;
     private final String pyramidRestUrl;
     private final RestTemplate restTemplate;
     private List<String> arrayOfGuids = new ArrayList<>();
@@ -41,7 +41,7 @@ public class MeterEventsReader implements ItemReader<List<EndDeviceEvent>> {
     private Instant dtTo;
     private boolean done;
 
-    public MeterEventsReader(String pyramidRestUrl, RestTemplate restTemplate, ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap) {
+    public MeterEventsReader(String pyramidRestUrl, RestTemplate restTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap) {
         this.commandParametersMap = commandParametersMap;
         this.pyramidRestUrl = pyramidRestUrl;
         this.restTemplate = restTemplate;
@@ -50,8 +50,9 @@ public class MeterEventsReader implements ItemReader<List<EndDeviceEvent>> {
     @BeforeStep
     private void setCurrentJobGuids(StepExecution stepExecution) {
         String externalJobId = stepExecution.getJobExecution().getJobParameters().getString("externalJobId");
-        GetMeterRequest body = commandParametersMap
-                .get(externalJobId).getCommandParameters().getBody();
+        GetMeterRequestCommand command = (GetMeterRequestCommand) commandParametersMap
+                .get(externalJobId).getCommandParameters();
+        GetMeterRequest body = command.getBody();
         this.arrayOfGuids = body.getArrayOfGuids().getGuids();
         this.dtFrom = body.getBeginDateTime();
         this.dtTo = body.getEndDateTime();

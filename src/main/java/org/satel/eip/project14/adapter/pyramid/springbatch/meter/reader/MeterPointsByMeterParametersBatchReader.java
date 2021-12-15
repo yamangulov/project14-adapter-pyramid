@@ -34,13 +34,13 @@ public class MeterPointsByMeterParametersBatchReader implements ItemReader<List<
 
     private final String pyramidRestUrl;
     private final RestTemplate restTemplate;
-    private final ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap;
+    private final ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap;
     private String meterGuids;
     private Instant dtFrom;
     private Instant dtTo;
     private boolean done;
 
-    public MeterPointsByMeterParametersBatchReader(String pyramidRestUrl, RestTemplate restTemplate, ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap) {
+    public MeterPointsByMeterParametersBatchReader(String pyramidRestUrl, RestTemplate restTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap) {
         this.pyramidRestUrl = pyramidRestUrl;
         this.restTemplate = restTemplate;
         this.commandParametersMap = commandParametersMap;
@@ -49,8 +49,9 @@ public class MeterPointsByMeterParametersBatchReader implements ItemReader<List<
     @BeforeStep
     private void setCurrentJobGuids(StepExecution stepExecution) {
         String externalJobId = stepExecution.getJobExecution().getJobParameters().getString("externalJobId");
-        GetMeterRequest body = commandParametersMap
-                .get(externalJobId).getCommandParameters().getBody();
+        GetMeterRequestCommand command = (GetMeterRequestCommand) commandParametersMap
+                .get(externalJobId).getCommandParameters();
+        GetMeterRequest body = command.getBody();
         this.meterGuids = String.join(",", body.getArrayOfGuids().getGuids());
         this.dtFrom = body.getBeginDateTime();
         this.dtTo = body.getEndDateTime();

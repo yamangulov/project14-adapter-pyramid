@@ -26,7 +26,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
 import java.time.LocalDateTime;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Configuration
@@ -37,26 +36,25 @@ public class RabbitMeterListener {
     private String metersUuidsExchange;
     @Value("${rabbitmq.MetersUuids.routingKey}")
     private String metersUuidsRoutingKey;
+
     @Value("${rabbitmq.Meters.exchange}")
     private String metersExchange;
-
     @Value("${rabbitmq.Meters.routingKey}")
     private String metersRoutingKey;
 
     final JobLauncher jobLauncher;
     final Job getMeterJob;
+
     private final RabbitTemplate rabbitTemplate;
-    private final ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap;
-    private final ConcurrentHashMap<String, Object> stepsResultsMap;
+    private final ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap;
 
     @Autowired
     public RabbitMeterListener(JobLauncher jobLauncher, Job getMeterJob, RabbitTemplate rabbitTemplate,
-                               ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap, ConcurrentHashMap<String, Object> stepsResultsMap) {
+                               ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap) {
         this.jobLauncher = jobLauncher;
         this.getMeterJob = getMeterJob;
         this.rabbitTemplate = rabbitTemplate;
         this.commandParametersMap = commandParametersMap;
-        this.stepsResultsMap = stepsResultsMap;
     }
 
     @RabbitListener(queues = "${rabbitmq.commands.queue}")
@@ -90,7 +88,6 @@ public class RabbitMeterListener {
                 .toJobParameters();
 
         commandParametersMap.put(externalJobId, new GetMeterRequestContainer(command));
-        stepsResultsMap.put(externalJobId, new ConcurrentHashMap<>());
         jobLauncher.run(getMeterJob, jobParameters);
 
         sendGetMeterJobIsDoneMessage(externalJobId);

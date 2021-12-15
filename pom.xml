@@ -22,6 +22,16 @@
             <groupId>org.satel.eip.project14.data</groupId>
             <artifactId>model</artifactId>
             <version>0.0.3</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-data-mongodb</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-data-elasticsearch</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>

@@ -1,7 +1,6 @@
 package org.satel.eip.project14.adapter.pyramid.springbatch.meter.configuration;
 
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandParametersContainer;
-import org.satel.eip.project14.adapter.pyramid.domain.command.entity.GetMeterRequestCommand;
 import org.satel.eip.project14.adapter.pyramid.springbatch.JobCompletionNotificationListener;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader.MeterEventsReader;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader.MeterPointsByMeterParametersBatchReader;
@@ -55,7 +54,7 @@ public class RestMeterBatchConfiguration {
     }
 
     @Bean("commandParametersMap")
-    public ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap() {
+    public ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap() {
         return new ConcurrentHashMap<>();
     }
 
@@ -72,7 +71,7 @@ public class RestMeterBatchConfiguration {
     //endpoint GET /meterpointsbymeterparametersbatch/{parameterguid}/{dtfrom}/{dtto}
     // + extra body in GET request with {meterguid} list with comma separator in it
     @Bean
-    public Step meterPointsByMeterParametersBatchStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap) {
+    public Step meterPointsByMeterParametersBatchStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap) {
         return stepBuilderFactory.get("stepMeterPointsByMeterParametersBatchStep")
                 .<List<Reading>, List<Reading>> chunk(chunkSize)
                 .reader(new MeterPointsByMeterParametersBatchReader(pyramidRestUrl, restTemplate, commandParametersMap))
@@ -83,8 +82,7 @@ public class RestMeterBatchConfiguration {
     //endpoint GET /meterevents/{meterguid}/{dtfrom}/{dtto}
     @Bean
     public Step meterEventsStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate,
-        ConcurrentHashMap<String, CommandParametersContainer<GetMeterRequestCommand>> commandParametersMap,
-        ConcurrentHashMap<String, Object> stepsResultsMap) {
+        ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap) {
         return stepBuilderFactory.get("stepMeterEvents")
                 .<List<EndDeviceEvent>, List<EndDeviceEvent>>chunk(chunkSize)
                 .reader(new MeterEventsReader(pyramidRestUrl, restTemplate, commandParametersMap))
