@@ -11,6 +11,9 @@ import org.satel.eip.project14.adapter.pyramid.domain.command.entity.GetMeterReq
 import org.satel.eip.project14.adapter.pyramid.domain.command.response.GetMeterRequestCommandResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.rabbit.annotation.Exchange;
+import org.springframework.amqp.rabbit.annotation.Queue;
+import org.springframework.amqp.rabbit.annotation.QueueBinding;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.batch.core.Job;
@@ -36,6 +39,13 @@ public class RabbitMeterListener {
     private String metersUuidsExchange;
     @Value("${rabbitmq.MetersUuids.routingKey}")
     private String metersUuidsRoutingKey;
+    @Value("${rabbitmq.commands.queue}")
+    private String defaultQueue;
+
+    @Value("${rabbitmq.MeterReadings.queue}")
+    private String meterReadingsQueue;
+    @Value("${rabbitmq.MeterReadings.routingKey}")
+    private String meterReadingsRoutingKey;
 
     @Value("${rabbitmq.Meters.exchange}")
     private String metersExchange;
@@ -60,7 +70,11 @@ public class RabbitMeterListener {
         this.objectMapper = objectMapper;
     }
 
-    @RabbitListener(queues = "${rabbitmq.commands.queue}")
+    @RabbitListener(bindings = @QueueBinding(
+            value = @Queue(value = "${rabbitmq.commands.queue}"),
+            exchange = @Exchange(value = "${rabbitmq.MetersUuids.exchange}"),
+            key = "${rabbitmq.MetersUuids.routingKey}"
+    ))
     public void listenPyramidCommands(String in) throws JobInstanceAlreadyCompleteException,
             JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException, JsonProcessingException {
 
@@ -87,6 +101,9 @@ public class RabbitMeterListener {
                 .addString("externalJobId", externalJobId)
                 .addString("exchange", this.metersUuidsExchange)
                 .addString("routingKey", this.metersUuidsRoutingKey)
+                .addString("readingsRoutingKey", this.meterReadingsRoutingKey)
+                .addString("meterReadingsQueue", this.meterReadingsQueue)
+                .addString("defaultQueue", defaultQueue)
                 .toJobParameters();
 
         commandParametersMap.put(externalJobId, new GetMeterRequestContainer(command));

@@ -7,7 +7,7 @@ import org.satel.eip.project14.adapter.pyramid.domain.command.container.GetMeter
 import org.satel.eip.project14.adapter.pyramid.domain.command.entity.GetMeterRequestCommand;
 import org.satel.eip.project14.adapter.pyramid.domain.command.entity.RestRequestType;
 import org.satel.eip.project14.data.model.pyramid.EndDeviceEvent;
-import org.satel.eip.project14.data.model.pyramid.wrapper.StringRootDataWrapper;
+import org.satel.eip.project14.data.model.pyramid.EndDeviceEventWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.batch.core.StepExecution;
@@ -86,17 +86,13 @@ public class MeterEventsReader implements ItemReader<List<EndDeviceEvent>> {
             List<EndDeviceEvent> results = new ArrayList<>();
             // для каждого ПУ meterguid собственный запрос в рест апи
             requestsByMeterGuids.forEach((meterGuid, request) -> {
-                String result = restTemplate.getForEntity(request, String.class, entity).toString();
-                String resultInner = objectMapper.convertValue(result, StringRootDataWrapper.class).getJsonString();
+                String result = restTemplate.getForEntity(request, String.class, entity).getBody().replace(":\"\"", ":\"").replace("\"\"}", "\"}").replace("\"\",", "\",");
+                EndDeviceEventWrapper resultInner;
                 try {
-                    List<EndDeviceEvent> resultList = Arrays.asList(objectMapper.readValue(resultInner, EndDeviceEvent[].class));
-                    resultList.forEach(reading -> {
-                        reading.setReceivedDate(Instant.now());
-                        reading.setMeterGuid(UUID.fromString(meterGuid));
-                    });
-                    results.addAll(resultList);
+                    resultInner = objectMapper.readValue(result, EndDeviceEventWrapper.class);
+                    results.addAll(resultInner.getEndDeviceEvents());
                 } catch (JsonProcessingException e) {
-                    LOGGER.error("Error on mapping of received data into EndDeviceEvent objects\n {}", e.getMessage());
+                    LOGGER.error("Error on mapping of received data into EndDeviceEventWrapper objects\n {}", e.getMessage());
                 }
             });
 

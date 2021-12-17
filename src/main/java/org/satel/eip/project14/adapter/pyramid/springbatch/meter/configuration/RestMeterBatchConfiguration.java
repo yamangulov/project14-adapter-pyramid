@@ -86,7 +86,7 @@ public class RestMeterBatchConfiguration {
         return stepBuilderFactory.get("stepMeterPointsByMeterParametersBatchStep")
                 .<List<Reading>, List<Reading>> chunk(chunkSize)
                 .reader(new MeterPointsByMeterParametersBatchReader(pyramidRestUrl, customRestTemplate, commandParametersMap, objectMapper))
-                .writer(new MeterPointsByMeterParametersBatchWriter(rabbitTemplate))
+                .writer(new MeterPointsByMeterParametersBatchWriter(rabbitTemplate, objectMapper))
                 .build();
     }
 
@@ -97,7 +97,7 @@ public class RestMeterBatchConfiguration {
         return stepBuilderFactory.get("stepMeterEvents")
                 .<List<EndDeviceEvent>, List<EndDeviceEvent>>chunk(chunkSize)
                 .reader(new MeterEventsReader(pyramidRestUrl, restTemplate, commandParametersMap, objectMapper))
-                .writer(new MeterEventsWriter(rabbitTemplate))
+                .writer(new MeterEventsWriter(rabbitTemplate, objectMapper))
                 .build();
     }
 
