@@ -21,7 +21,7 @@
         <dependency>
             <groupId>org.satel.eip.project14.data</groupId>
             <artifactId>model</artifactId>
-            <version>0.0.3</version>
+            <version>0.0.6</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.springframework.boot</groupId>
@@ -68,6 +68,12 @@
             <version>42.3.1</version>
         </dependency>
 
+<!--        необходимо для обработки java.time.Instant в jackson-->
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -77,6 +83,12 @@
             <groupId>org.springframework.batch</groupId>
             <artifactId>spring-batch-test</artifactId>
             <scope>test</scope>
+        </dependency>
+<!--        for GET requests with body-->
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpclient</artifactId>
+            <version>4.5.13</version>
         </dependency>
     </dependencies>
 

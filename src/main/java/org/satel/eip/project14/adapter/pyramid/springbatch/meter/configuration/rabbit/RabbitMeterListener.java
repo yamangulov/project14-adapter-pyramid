@@ -48,26 +48,28 @@ public class RabbitMeterListener {
     private final RabbitTemplate rabbitTemplate;
     private final ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap;
 
+    private final ObjectMapper objectMapper;
+
     @Autowired
     public RabbitMeterListener(JobLauncher jobLauncher, Job getMeterJob, RabbitTemplate rabbitTemplate,
-                               ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap) {
+                               ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper) {
         this.jobLauncher = jobLauncher;
         this.getMeterJob = getMeterJob;
         this.rabbitTemplate = rabbitTemplate;
         this.commandParametersMap = commandParametersMap;
+        this.objectMapper = objectMapper;
     }
 
     @RabbitListener(queues = "${rabbitmq.commands.queue}")
     public void listenPyramidCommands(String in) throws JobInstanceAlreadyCompleteException,
             JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException, JsonProcessingException {
 
-        ObjectMapper mapper = new ObjectMapper();
-        JsonNode rootNode = mapper.readTree(in);
+        JsonNode rootNode = objectMapper.readTree(in);
 
         CommandType commandType = CommandType.getCommandTypeByString(rootNode.get("commandType").asText());
 
         if (commandType == CommandType.GET_PYRAMID_METERS_REQUEST) {
-            processGetPyramidMetersJob(mapper, in);
+            processGetPyramidMetersJob(objectMapper, in);
         } else {
             LOGGER.error("UNKNOWN COMMAND {} GOT FROM RABBITMQ", commandType);
         }
@@ -90,7 +92,8 @@ public class RabbitMeterListener {
         commandParametersMap.put(externalJobId, new GetMeterRequestContainer(command));
         jobLauncher.run(getMeterJob, jobParameters);
 
-        sendGetMeterJobIsDoneMessage(externalJobId);
+//        на время отладки пока не посылаю response, временно Rest API Пирамиды не отдает код ошибки, сейчас всегда только 200 ОК
+//        sendGetMeterJobIsDoneMessage(externalJobId);
     }
 
     private void sendGetMeterJobIsDoneMessage(String externalJobId) throws JsonProcessingException {

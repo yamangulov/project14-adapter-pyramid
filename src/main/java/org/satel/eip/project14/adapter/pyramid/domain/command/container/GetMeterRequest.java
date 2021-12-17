@@ -8,6 +8,8 @@
 
 package org.satel.eip.project14.adapter.pyramid.domain.command.container;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -15,9 +17,12 @@ import java.time.Instant;
 
 @Getter
 @Setter
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class GetMeterRequest {
 
+    @JsonFormat(shape = JsonFormat.Shape.STRING, timezone = "UTC")
     protected Instant beginDateTime;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, timezone = "UTC")
     protected Instant endDateTime;
     protected Integer offset;
     protected Integer limit;

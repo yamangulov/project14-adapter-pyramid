@@ -6,11 +6,11 @@ import lombok.ToString;
 @Getter
 @ToString
 public enum RestRequestType {
-    METEREVENTS("meterevents/"),
+    METEREVENTS("meterevents"),
     METERPOINTSBYMETERPARAMETERSBATCH("meterpointsbymeterparametersbatch");
-    private final String type;
+    private final String rootDir;
 
-    RestRequestType(String type) {
-        this.type = type;
+    RestRequestType(String rootDir) {
+        this.rootDir = rootDir;
     }
 }

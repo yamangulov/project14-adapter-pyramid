@@ -2,7 +2,6 @@ package org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandParametersContainer;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.GetMeterRequest;
 import org.satel.eip.project14.adapter.pyramid.domain.command.entity.GetMeterRequestCommand;
@@ -40,11 +39,13 @@ public class MeterEventsReader implements ItemReader<List<EndDeviceEvent>> {
     private Instant dtFrom;
     private Instant dtTo;
     private boolean done;
+    private final ObjectMapper objectMapper;
 
-    public MeterEventsReader(String pyramidRestUrl, RestTemplate restTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap) {
+    public MeterEventsReader(String pyramidRestUrl, RestTemplate restTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper) {
         this.commandParametersMap = commandParametersMap;
         this.pyramidRestUrl = pyramidRestUrl;
         this.restTemplate = restTemplate;
+        this.objectMapper = objectMapper;
     }
 
     @BeforeStep
@@ -53,7 +54,7 @@ public class MeterEventsReader implements ItemReader<List<EndDeviceEvent>> {
         GetMeterRequestCommand command = (GetMeterRequestCommand) commandParametersMap
                 .get(externalJobId).getCommandParameters();
         GetMeterRequest body = command.getBody();
-        this.arrayOfGuids = body.getArrayOfGuids().getGuids();
+        this.arrayOfGuids = body.getArrayOfGuids().getGuid();
         this.dtFrom = body.getBeginDateTime();
         this.dtTo = body.getEndDateTime();
         this.done = false;
@@ -68,7 +69,7 @@ public class MeterEventsReader implements ItemReader<List<EndDeviceEvent>> {
             Map<String, String> requestsByMeterGuids = new ConcurrentHashMap<>();
             this.arrayOfGuids.forEach(meterGuid -> {
                 StringBuilder builder = new StringBuilder(pyramidRestUrl);
-                builder.append(RestRequestType.METEREVENTS);
+                builder.append(RestRequestType.METEREVENTS.getRootDir());
                 builder.append("/");
                 builder.append(meterGuid);
                 builder.append("/");
@@ -86,10 +87,9 @@ public class MeterEventsReader implements ItemReader<List<EndDeviceEvent>> {
             // для каждого ПУ meterguid собственный запрос в рест апи
             requestsByMeterGuids.forEach((meterGuid, request) -> {
                 String result = restTemplate.getForEntity(request, String.class, entity).toString();
-                ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
-                String resultInner = mapper.convertValue(result, StringRootDataWrapper.class).getJsonString();
+                String resultInner = objectMapper.convertValue(result, StringRootDataWrapper.class).getJsonString();
                 try {
-                    List<EndDeviceEvent> resultList = Arrays.asList(mapper.readValue(resultInner, EndDeviceEvent[].class));
+                    List<EndDeviceEvent> resultList = Arrays.asList(objectMapper.readValue(resultInner, EndDeviceEvent[].class));
                     resultList.forEach(reading -> {
                         reading.setReceivedDate(Instant.now());
                         reading.setMeterGuid(UUID.fromString(meterGuid));

@@ -13,13 +13,13 @@ import java.util.List;
 
 public class ArrayOfGuids {
 
-    protected List<String> guids;
+    protected List<String> guid;
 
-    public List<String> getGuids() {
-        if (guids == null) {
-            guids = new ArrayList<String>();
+    public List<String> getGuid() {
+        if (guid == null) {
+            guid = new ArrayList<String>();
         }
-        return this.guids;
+        return this.guid;
     }
 
 }

@@ -1,9 +1,11 @@
 package org.satel.eip.project14.adapter.pyramid.springbatch.meter.configuration;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandParametersContainer;
 import org.satel.eip.project14.adapter.pyramid.springbatch.JobCompletionNotificationListener;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader.MeterEventsReader;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader.MeterPointsByMeterParametersBatchReader;
+import org.satel.eip.project14.adapter.pyramid.springbatch.meter.request.CustomHttpComponentsClientHttpRequestFactory;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer.MeterEventsWriter;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer.MeterPointsByMeterParametersBatchWriter;
 import org.satel.eip.project14.data.model.pyramid.EndDeviceEvent;
@@ -17,6 +19,7 @@ import org.springframework.batch.core.configuration.annotation.JobBuilderFactory
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -37,15 +40,23 @@ public class RestMeterBatchConfiguration {
     final JobBuilderFactory jobBuilderFactory;
     final StepBuilderFactory stepBuilderFactory;
 
+    private final ObjectMapper objectMapper;
+
     @Autowired
-    public RestMeterBatchConfiguration(JobBuilderFactory jobBuilderFactory, StepBuilderFactory stepBuilderFactory) {
+    public RestMeterBatchConfiguration(JobBuilderFactory jobBuilderFactory, StepBuilderFactory stepBuilderFactory, ObjectMapper objectMapper) {
         this.jobBuilderFactory = jobBuilderFactory;
         this.stepBuilderFactory = stepBuilderFactory;
+        this.objectMapper = objectMapper;
     }
 
-    @Bean
+    @Bean("restTemplate")
     RestTemplate restTemplate() {
         return new RestTemplate();
+    }
+
+    @Bean("customRestTemplate")
+    RestTemplate customRestTemplate() {
+        return new RestTemplate(new CustomHttpComponentsClientHttpRequestFactory());
     }
 
     @Bean
@@ -71,21 +82,21 @@ public class RestMeterBatchConfiguration {
     //endpoint GET /meterpointsbymeterparametersbatch/{parameterguid}/{dtfrom}/{dtto}
     // + extra body in GET request with {meterguid} list with comma separator in it
     @Bean
-    public Step meterPointsByMeterParametersBatchStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap) {
+    public Step meterPointsByMeterParametersBatchStep(@Qualifier("customRestTemplate") RestTemplate customRestTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper) {
         return stepBuilderFactory.get("stepMeterPointsByMeterParametersBatchStep")
                 .<List<Reading>, List<Reading>> chunk(chunkSize)
-                .reader(new MeterPointsByMeterParametersBatchReader(pyramidRestUrl, restTemplate, commandParametersMap))
+                .reader(new MeterPointsByMeterParametersBatchReader(pyramidRestUrl, customRestTemplate, commandParametersMap, objectMapper))
                 .writer(new MeterPointsByMeterParametersBatchWriter(rabbitTemplate))
                 .build();
     }
 
     //endpoint GET /meterevents/{meterguid}/{dtfrom}/{dtto}
     @Bean
-    public Step meterEventsStep(RestTemplate restTemplate, RabbitTemplate rabbitTemplate,
-        ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap) {
+    public Step meterEventsStep(@Qualifier("restTemplate") RestTemplate restTemplate, RabbitTemplate rabbitTemplate,
+        ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper) {
         return stepBuilderFactory.get("stepMeterEvents")
                 .<List<EndDeviceEvent>, List<EndDeviceEvent>>chunk(chunkSize)
-                .reader(new MeterEventsReader(pyramidRestUrl, restTemplate, commandParametersMap))
+                .reader(new MeterEventsReader(pyramidRestUrl, restTemplate, commandParametersMap, objectMapper))
                 .writer(new MeterEventsWriter(rabbitTemplate))
                 .build();
     }
