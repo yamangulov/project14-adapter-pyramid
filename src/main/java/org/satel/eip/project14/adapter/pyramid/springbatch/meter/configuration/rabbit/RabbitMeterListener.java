@@ -98,10 +98,19 @@ public class RabbitMeterListener {
         try {
             rootNode = objectMapper.readTree(in);
         } catch (Exception e) {
-            LOGGER.error("BAD COMMAND: {}", e.getMessage());
-            sendBadCommandResponse(null, e.getMessage());
+            LOGGER.error("BAD ON READING COMMAND: {}", e.getMessage());
+            sendBadCommandResponse(null, "BAD ON READING COMMAND FROM RABBIT");
             return;
         }
+
+        String commandUuid = rootNode.get("uuid") == null ? null : rootNode.get("uuid").asText();
+        if (commandUuid == null || commandUuid.isEmpty()) {
+            LOGGER.error("EMPTY COMMAND UUID");
+            sendBadCommandResponse(commandUuid, "EMPTY COMMAND UUID");
+            return;
+        }
+        MDC.put("commandUuid", commandUuid);
+        LOGGER.info(in);
 
         CommandType commandType = CommandType.getCommandTypeByString(rootNode.get("commandType").asText());
 

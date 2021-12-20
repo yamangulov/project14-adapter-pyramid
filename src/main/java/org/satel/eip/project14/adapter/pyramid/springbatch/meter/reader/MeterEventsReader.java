@@ -40,6 +40,7 @@ public class MeterEventsReader implements ItemReader<List<EndDeviceEvent>> {
     private Instant dtTo;
     private boolean done;
     private final ObjectMapper objectMapper;
+    private String externalJobId;
 
     public MeterEventsReader(String pyramidRestUrl, RestTemplate restTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper) {
         this.commandParametersMap = commandParametersMap;
@@ -50,7 +51,7 @@ public class MeterEventsReader implements ItemReader<List<EndDeviceEvent>> {
 
     @BeforeStep
     private void setCurrentJobGuids(StepExecution stepExecution) {
-        String externalJobId = stepExecution.getJobExecution().getJobParameters().getString("externalJobId");
+        this.externalJobId = stepExecution.getJobExecution().getJobParameters().getString("externalJobId");
         GetMeterRequestCommand command = (GetMeterRequestCommand) commandParametersMap
                 .get(externalJobId).getCommandParameters();
         GetMeterRequest body = command.getBody();
@@ -94,6 +95,13 @@ public class MeterEventsReader implements ItemReader<List<EndDeviceEvent>> {
                 } catch (JsonProcessingException e) {
                     LOGGER.error("Error on mapping of received data into EndDeviceEventWrapper objects\n {}", e.getMessage());
                 }
+            });
+
+            results.forEach(endDeviceEvent -> {
+                endDeviceEvent.setEipLastModifiedDate(Instant.now());
+                endDeviceEvent.setCommandUuid(UUID.fromString(externalJobId));
+                endDeviceEvent.setSystemId(12);
+                endDeviceEvent.setEntityType(endDeviceEvent.getClass().getSimpleName());
             });
 
             this.done = true;

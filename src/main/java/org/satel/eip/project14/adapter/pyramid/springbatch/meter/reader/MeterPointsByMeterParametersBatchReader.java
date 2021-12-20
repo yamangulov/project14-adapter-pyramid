@@ -41,6 +41,7 @@ public class MeterPointsByMeterParametersBatchReader implements ItemReader<List<
     private Instant dtTo;
     private boolean done;
     private final ObjectMapper objectMapper;
+    private String externalJobId;
 
     public MeterPointsByMeterParametersBatchReader(String pyramidRestUrl, RestTemplate restTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper) {
         this.pyramidRestUrl = pyramidRestUrl;
@@ -51,7 +52,7 @@ public class MeterPointsByMeterParametersBatchReader implements ItemReader<List<
 
     @BeforeStep
     private void setCurrentJobGuids(StepExecution stepExecution) {
-        String externalJobId = stepExecution.getJobExecution().getJobParameters().getString("externalJobId");
+        this.externalJobId = stepExecution.getJobExecution().getJobParameters().getString("externalJobId");
         GetMeterRequestCommand command = (GetMeterRequestCommand) commandParametersMap
                 .get(externalJobId).getCommandParameters();
         GetMeterRequest body = command.getBody();
@@ -94,8 +95,11 @@ public class MeterPointsByMeterParametersBatchReader implements ItemReader<List<
                 try {
                     List<Reading> resultList = Arrays.asList(objectMapper.readValue(resultInner, Reading[].class));
                     resultList.forEach(reading -> {
-                        reading.setReceivedDate(Instant.now());
+                        reading.setEipLastModifiedDate(Instant.now());
                         reading.setParameterGuid(UUID.fromString(meterParameterGuid));
+                        reading.setCommandUuid(UUID.fromString(externalJobId));
+                        reading.setSystemId(12);
+                        reading.setEntityType(reading.getClass().getSimpleName());
                     });
                     if (!resultList.isEmpty()) {
                         results.addAll(resultList);
