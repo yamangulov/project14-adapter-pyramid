@@ -2,7 +2,7 @@ package org.satel.eip.project14.adapter.pyramid.springbatch.meter.configuration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandParametersContainer;
-import org.satel.eip.project14.adapter.pyramid.springbatch.JobCompletionNotificationListener;
+import org.satel.eip.project14.adapter.pyramid.springbatch.meter.JobCompletionNotificationListener;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader.MeterEventsReader;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader.MeterPointsByMeterParametersBatchReader;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.request.CustomHttpComponentsClientHttpRequestFactory;
@@ -70,10 +70,10 @@ public class RestMeterBatchConfiguration {
     }
 
     @Bean
-    public Job getMeterJob(Step meterPointsByMeterParametersBatchStep, Step meterEventsStep) {
+    public Job getMeterJob(Step meterPointsByMeterParametersBatchStep, Step meterEventsStep, RabbitTemplate rabbitTemplate) {
         return jobBuilderFactory.get("pyramidJob")
                 .incrementer(new RunIdIncrementer())
-                .listener(new JobCompletionNotificationListener())
+                .listener(new JobCompletionNotificationListener(rabbitTemplate))
                 .start(meterPointsByMeterParametersBatchStep)
                 .next(meterEventsStep)
                 .build();

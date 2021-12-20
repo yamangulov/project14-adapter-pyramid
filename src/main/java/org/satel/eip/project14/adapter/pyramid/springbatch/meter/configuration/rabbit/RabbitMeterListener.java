@@ -8,9 +8,11 @@ import org.satel.eip.project14.adapter.pyramid.domain.command.CommandType;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandParametersContainer;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.GetMeterRequestContainer;
 import org.satel.eip.project14.adapter.pyramid.domain.command.entity.GetMeterRequestCommand;
-import org.satel.eip.project14.adapter.pyramid.domain.command.response.GetMeterRequestCommandResponse;
+import org.satel.eip.project14.adapter.pyramid.domain.command.response.CommandResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.annotation.Exchange;
 import org.springframework.amqp.rabbit.annotation.Queue;
 import org.springframework.amqp.rabbit.annotation.QueueBinding;
@@ -52,6 +54,20 @@ public class RabbitMeterListener {
     @Value("${rabbitmq.Meters.routingKey}")
     private String metersRoutingKey;
 
+    @Value("${rabbitmq.BadCommand.exchange}")
+    private String badCommandExchange;
+    @Value("${rabbitmq.BadCommand.routingKey}")
+    private String badCommandRoutingKey;
+    @Value("${rabbitmq.BadCommand.queue}")
+    private String badCommandQueue;
+
+    @Value("${rabbitmq.SuccessCommand.exchange}")
+    private String successCommandExchange;
+    @Value("${rabbitmq.SuccessCommand.routingKey}")
+    private String successCommandRoutingKey;
+    @Value("${rabbitmq.SuccessCommand.queue}")
+    private String successCommandQueue;
+
     final JobLauncher jobLauncher;
     final Job getMeterJob;
 
@@ -78,14 +94,33 @@ public class RabbitMeterListener {
     public void listenPyramidCommands(String in) throws JobInstanceAlreadyCompleteException,
             JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException, JsonProcessingException {
 
-        JsonNode rootNode = objectMapper.readTree(in);
+        JsonNode rootNode;
+        try {
+            rootNode = objectMapper.readTree(in);
+        } catch (Exception e) {
+            LOGGER.error("BAD COMMAND: {}", e.getMessage());
+            sendBadCommandResponse(null, e.getMessage());
+            return;
+        }
 
         CommandType commandType = CommandType.getCommandTypeByString(rootNode.get("commandType").asText());
 
-        if (commandType == CommandType.GET_PYRAMID_METERS_REQUEST) {
-            processGetPyramidMetersJob(objectMapper, in);
-        } else {
+        if (commandType == null) {
             LOGGER.error("UNKNOWN COMMAND {} GOT FROM RABBITMQ", commandType);
+            sendBadCommandResponse(rootNode.get("commandType").asText(), "UNKNOWN COMMAND");
+            return;
+        }
+
+        if (commandType == CommandType.GET_PYRAMID_METERS_REQUEST) {
+            try {
+                processGetPyramidMetersJob(objectMapper, in);
+            } catch (Exception e) {
+                LOGGER.error("ERROR ON EXECUTING COMMAND IN BATCH JOB {}", commandType);
+                sendBadCommandResponse(commandType.getName(), "ERROR ON EXECUTING COMMAND IN BATCH JOB");
+            }
+        } else {
+            LOGGER.error("NOT SUFFICIENT FOR PYRAMID COMMAND {} GOT FROM RABBITMQ", commandType);
+            sendBadCommandResponse(rootNode.get("commandType").asText(), "NOT SUFFICIENT FOR PYRAMID COMMAND");
         }
 
     }
@@ -104,19 +139,30 @@ public class RabbitMeterListener {
                 .addString("readingsRoutingKey", this.meterReadingsRoutingKey)
                 .addString("meterReadingsQueue", this.meterReadingsQueue)
                 .addString("defaultQueue", defaultQueue)
+                .addString("successCommandRoutingKey", this.successCommandRoutingKey)
+                .addString("successCommandQueue", this.successCommandQueue)
                 .toJobParameters();
 
         commandParametersMap.put(externalJobId, new GetMeterRequestContainer(command));
         jobLauncher.run(getMeterJob, jobParameters);
 
-//        на время отладки пока не посылаю response, временно Rest API Пирамиды не отдает код ошибки, сейчас всегда только 200 ОК
-//        sendGetMeterJobIsDoneMessage(externalJobId);
     }
 
-    private void sendGetMeterJobIsDoneMessage(String externalJobId) throws JsonProcessingException {
+    private void sendBadCommandResponse(String externalJobId, String errorMsg) throws JsonProcessingException {
         ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
-        rabbitTemplate.convertAndSend(this.metersExchange, this.metersRoutingKey,
-                mapper.writeValueAsString(new GetMeterRequestCommandResponse(null, externalJobId)));
+        String result = mapper.writeValueAsString(
+                new CommandResponse(externalJobId, null, errorMsg));
+
+        MDC.put("commandUuid", externalJobId);
+        MDC.put("operation", "Write command result");
+        LOGGER.info(result);
+
+        rabbitTemplate.setDefaultReceiveQueue(badCommandQueue);
+        rabbitTemplate.convertAndSend(this.badCommandExchange, this.badCommandRoutingKey, result, m -> {
+            m.getMessageProperties().setContentType(MessageProperties.CONTENT_TYPE_JSON);
+            return m;
+        });
+        rabbitTemplate.setDefaultReceiveQueue(defaultQueue);
     }
 
 }
