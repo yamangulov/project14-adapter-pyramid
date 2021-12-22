@@ -91,6 +91,9 @@ public class MeterEventsReader implements ItemReader<List<EndDeviceEvent>> {
                 EndDeviceEventWrapper resultInner;
                 try {
                     resultInner = objectMapper.readValue(result, EndDeviceEventWrapper.class);
+                    resultInner.getEndDeviceEvents().forEach(endDeviceEvent -> {
+                        endDeviceEvent.setMeterGuid(UUID.fromString(meterGuid));
+                    });
                     results.addAll(resultInner.getEndDeviceEvents());
                 } catch (JsonProcessingException e) {
                     LOGGER.error("Error on mapping of received data into EndDeviceEventWrapper objects\n {}", e.getMessage());
