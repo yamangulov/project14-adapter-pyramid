@@ -49,10 +49,15 @@ public class RabbitMeterListener {
     @Value("${rabbitmq.MeterReadings.routingKey}")
     private String meterReadingsRoutingKey;
 
-    @Value("${rabbitmq.Meters.exchange}")
-    private String metersExchange;
-    @Value("${rabbitmq.Meters.routingKey}")
-    private String metersRoutingKey;
+    @Value("${rabbitmq.Consolidations.queue}")
+    private String consolidationsQueue;
+    @Value("${rabbitmq.Consolidations.routingKey}")
+    private String consolidationsRoutingKey;
+
+    @Value("${rabbitmq.Events.queue}")
+    private String eventsQueue;
+    @Value("${rabbitmq.Events.routingKey}")
+    private String eventsRoutingKey;
 
     @Value("${rabbitmq.BadCommand.exchange}")
     private String badCommandExchange;
@@ -147,6 +152,10 @@ public class RabbitMeterListener {
                 .addString("routingKey", this.metersUuidsRoutingKey)
                 .addString("readingsRoutingKey", this.meterReadingsRoutingKey)
                 .addString("meterReadingsQueue", this.meterReadingsQueue)
+                .addString("consolidationsRoutingKey", this.consolidationsRoutingKey)
+                .addString("consolidationsQueue", this.consolidationsQueue)
+                .addString("eventsRoutingKey", this.eventsRoutingKey)
+                .addString("eventsQueue", this.eventsQueue)
                 .addString("defaultQueue", defaultQueue)
                 .addString("successCommandRoutingKey", this.successCommandRoutingKey)
                 .addString("successCommandQueue", this.successCommandQueue)

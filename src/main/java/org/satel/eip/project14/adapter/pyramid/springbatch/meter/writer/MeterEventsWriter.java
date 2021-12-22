@@ -18,10 +18,12 @@ public class MeterEventsWriter implements ItemWriter<List<EndDeviceEvent>> {
 
     private final RabbitTemplate rabbitTemplate;
     private String exchange;
-    private String routingKey;
-    private String meterReadingsQueue;
+    private String eventsRoutingKey;
+    private String eventsQueue;
     private String defaultQueue;
     private final ObjectMapper objectMapper;
+    private String consolidationsQueue;
+    private String consolidationsRoutingKey;
 
     public MeterEventsWriter(RabbitTemplate rabbitTemplate, ObjectMapper objectMapper) {
         this.rabbitTemplate = rabbitTemplate;
@@ -31,9 +33,11 @@ public class MeterEventsWriter implements ItemWriter<List<EndDeviceEvent>> {
     @BeforeStep
     private void initData(StepExecution stepExecution) {
         this.exchange = stepExecution.getJobExecution().getJobParameters().getString("exchange");
-        this.routingKey = stepExecution.getJobExecution().getJobParameters().getString("readingsRoutingKey");
-        this.meterReadingsQueue = stepExecution.getJobExecution().getJobParameters().getString("meterReadingsQueue");
+        this.eventsRoutingKey = stepExecution.getJobExecution().getJobParameters().getString("eventsRoutingKey");
+        this.eventsQueue = stepExecution.getJobExecution().getJobParameters().getString("eventsQueue");
         this.defaultQueue = stepExecution.getJobExecution().getJobParameters().getString("defaultQueue");
+        this.consolidationsRoutingKey = stepExecution.getJobExecution().getJobParameters().getString("consolidationsRoutingKey");
+        this.consolidationsQueue = stepExecution.getJobExecution().getJobParameters().getString("consolidationsQueue");
     }
 
     @Override
@@ -42,7 +46,7 @@ public class MeterEventsWriter implements ItemWriter<List<EndDeviceEvent>> {
 
         List<EndDeviceEvent> readings = new ArrayList<>();
         items.forEach(readings::addAll);
-        rabbitTemplate.setDefaultReceiveQueue(meterReadingsQueue);
+        rabbitTemplate.setDefaultReceiveQueue(eventsQueue);
         readings.forEach(reading -> {
             String readingString = null;
             try {
@@ -52,9 +56,23 @@ public class MeterEventsWriter implements ItemWriter<List<EndDeviceEvent>> {
                         reading, e.getMessage());
             }
             if (readingString != null) {
-                rabbitTemplate.convertAndSend(this.exchange, this.routingKey, readingString);
+                rabbitTemplate.convertAndSend(this.exchange, this.eventsRoutingKey, readingString);
             }
         });
+        rabbitTemplate.setDefaultReceiveQueue(consolidationsQueue);
+        readings.forEach(reading -> {
+            String readingString = null;
+            try {
+                readingString = objectMapper.writeValueAsString(reading);
+            } catch (JsonProcessingException e) {
+                LOGGER.info("Error in MeterEventsWriter on mapping reading {} into String:\n{}",
+                        reading, e.getMessage());
+            }
+            if (readingString != null) {
+                rabbitTemplate.convertAndSend(this.exchange, this.consolidationsRoutingKey, readingString);
+            }
+        });
+        rabbitTemplate.setDefaultReceiveQueue(defaultQueue);
 
         LOGGER.info("End writing EndDeviceEvents on step2 into RabbitMQ");
     }

@@ -22,6 +22,8 @@ public class MeterPointsByMeterParametersBatchWriter implements ItemWriter<List<
     private String meterReadingsQueue;
     private String defaultQueue;
     private final ObjectMapper objectMapper;
+    private String consolidationsQueue;
+    private String consolidationsRoutingKey;
 
     public MeterPointsByMeterParametersBatchWriter(RabbitTemplate rabbitTemplate, ObjectMapper objectMapper) {
         this.rabbitTemplate = rabbitTemplate;
@@ -32,7 +34,9 @@ public class MeterPointsByMeterParametersBatchWriter implements ItemWriter<List<
     private void initData(StepExecution stepExecution) {
         this.exchange = stepExecution.getJobExecution().getJobParameters().getString("exchange");
         this.routingKey = stepExecution.getJobExecution().getJobParameters().getString("readingsRoutingKey");
+        this.consolidationsRoutingKey = stepExecution.getJobExecution().getJobParameters().getString("consolidationsRoutingKey");
         this.meterReadingsQueue = stepExecution.getJobExecution().getJobParameters().getString("meterReadingsQueue");
+        this.consolidationsQueue = stepExecution.getJobExecution().getJobParameters().getString("consolidationsQueue");
         this.defaultQueue = stepExecution.getJobExecution().getJobParameters().getString("defaultQueue");
     }
 
@@ -53,6 +57,19 @@ public class MeterPointsByMeterParametersBatchWriter implements ItemWriter<List<
             }
             if (readingString != null) {
                 rabbitTemplate.convertAndSend(this.exchange, this.routingKey, readingString);
+            }
+        });
+        rabbitTemplate.setDefaultReceiveQueue(consolidationsQueue);
+        readings.forEach(reading -> {
+            String readingString = null;
+            try {
+                readingString = objectMapper.writeValueAsString(reading);
+            } catch (JsonProcessingException e) {
+                LOGGER.info("Error in MeterPointsByMeterParametersBatchWriter on mapping reading {} into String:\n{}",
+                        reading, e.getMessage());
+            }
+            if (readingString != null) {
+                rabbitTemplate.convertAndSend(this.exchange, this.consolidationsRoutingKey, readingString);
             }
         });
         rabbitTemplate.setDefaultReceiveQueue(defaultQueue);
