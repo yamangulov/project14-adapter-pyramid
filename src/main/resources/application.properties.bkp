@@ -47,3 +47,8 @@ rabbitmq.SuccessCommand.exchange=PROJECT14
 rabbitmq.SuccessCommand.routingKey=METERS_SUCCESS_COMMANDS
 
 commands.GetMeter.limit=2
+
+#actuator minimal settings
+management.endpoints.enabled-by-default=true
+management.metrics.export.prometheus.enabled=true
+management.endpoints.web.exposure.include=*

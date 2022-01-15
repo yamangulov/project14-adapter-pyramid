@@ -1,0 +1,24 @@
+spring:
+    application:
+        name: pyramid
+    config:
+        import: optional:configserver:http://localhost:8800
+    profiles:
+        active: local
+    cloud:
+        config:
+            fail-fast: true
+            enabled: true
+
+
+#actuator minimal settings - don't move into config-server, because they need for refreshing properties by default
+management:
+  endpoints:
+      enabled-by-default: true
+      web:
+        exposure:
+            include: "*"
+  metrics:
+      export:
+          prometheus:
+              enabled: true
