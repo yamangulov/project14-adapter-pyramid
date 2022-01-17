@@ -9,6 +9,13 @@ spring:
         config:
             fail-fast: true
             enabled: true
+            username: configserver
+            password: configserver
+    security:
+      user:
+          name: actuator
+          password: actuator
+          roles: ACTUATOR_ADMIN
 
 
 #actuator minimal settings - don't move into config-server, because they need for refreshing properties by default
@@ -22,3 +29,4 @@ management:
       export:
           prometheus:
               enabled: true
+
