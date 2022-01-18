@@ -25,12 +25,12 @@ public class MeterEventsWriter implements ItemWriter<List<EndDeviceEvent>> {
     private final ObjectMapper objectMapper;
     private String consolidationsQueue;
     private String consolidationsRoutingKey;
-    private Counter counter;
+    private final Counter outCounter;
 
-    public MeterEventsWriter(RabbitTemplate rabbitTemplate, ObjectMapper objectMapper, Counter counter) {
+    public MeterEventsWriter(RabbitTemplate rabbitTemplate, ObjectMapper objectMapper, Counter outCounter) {
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
-        this.counter = counter;
+        this.outCounter = outCounter;
     }
 
     @BeforeStep
@@ -73,7 +73,7 @@ public class MeterEventsWriter implements ItemWriter<List<EndDeviceEvent>> {
             }
             if (readingString != null) {
                 rabbitTemplate.convertAndSend(this.exchange, this.consolidationsRoutingKey, readingString);
-                counter.increment();
+                outCounter.increment();
             }
         });
         rabbitTemplate.setDefaultReceiveQueue(defaultQueue);
