@@ -25,6 +25,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.client.RestTemplate;
 
 import javax.annotation.PostConstruct;
@@ -33,6 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Configuration
 @EnableBatchProcessing
+@EnableScheduling
 public class RestMeterBatchConfiguration {
     @Value("${pyramid.rest.url}")
     private String pyramidRestUrl;
@@ -119,6 +122,13 @@ public class RestMeterBatchConfiguration {
                 .reader(new MeterEventsReader(pyramidRestUrl, restTemplate, commandParametersMap, objectMapper))
                 .writer(new MeterEventsWriter(rabbitTemplate, objectMapper, counter))
                 .build();
+    }
+
+    @Scheduled(fixedDelayString = "60000")
+    private void clearCounter() {
+        this.counter = Counter.builder("outcome_rabbitmq_package")
+                .description("Income package got from rabbitmq")
+                .register(meterRegistry);
     }
 
 }

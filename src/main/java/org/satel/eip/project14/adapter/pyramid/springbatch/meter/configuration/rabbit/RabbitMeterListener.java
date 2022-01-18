@@ -31,13 +31,17 @@ import org.springframework.batch.core.repository.JobInstanceAlreadyCompleteExcep
 import org.springframework.batch.core.repository.JobRestartException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.Scheduled;
 
 import javax.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Configuration
+@EnableScheduling
 public class RabbitMeterListener {
     static final Logger LOGGER = LoggerFactory.getLogger(RabbitMeterListener.class);
 
@@ -106,6 +110,11 @@ public class RabbitMeterListener {
         this.commandParametersMap = commandParametersMap;
         this.objectMapper = objectMapper;
         this.meterRegistry = meterRegistry;
+    }
+    
+    @Bean("inCounter")
+    Counter inCounter() {
+        return this.counter;
     }
 
     @RabbitListener(bindings = @QueueBinding(
@@ -200,6 +209,13 @@ public class RabbitMeterListener {
             return m;
         });
         rabbitTemplate.setDefaultReceiveQueue(defaultQueue);
+    }
+
+    @Scheduled(fixedDelayString = "60000")
+    private void clearCounter() {
+        this.counter = Counter.builder("income_rabbitmq_package")
+                .description("Income package got from rabbitmq")
+                .register(meterRegistry);
     }
 
 }
