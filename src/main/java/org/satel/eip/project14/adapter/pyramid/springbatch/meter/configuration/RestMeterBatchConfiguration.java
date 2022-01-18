@@ -49,11 +49,11 @@ public class RestMeterBatchConfiguration {
     private final ObjectMapper objectMapper;
 
     private final MeterRegistry meterRegistry;
-    private Counter counter;
+    private Counter outCounter;
 
     @PostConstruct
     public void init() {
-        counter =
+        outCounter =
                 Counter.builder("outcome_rabbitmq_package")
                         .description("Outcome package got from rabbitmq")
                         .register(meterRegistry);
@@ -69,7 +69,7 @@ public class RestMeterBatchConfiguration {
 
     @Bean("counter")
     Counter counter() {
-        return this.counter;
+        return this.outCounter;
     }
 
     @Bean("restTemplate")
@@ -109,7 +109,7 @@ public class RestMeterBatchConfiguration {
         return stepBuilderFactory.get("stepMeterPointsByMeterParametersBatchStep")
                 .<List<Reading>, List<Reading>> chunk(chunkSize)
                 .reader(new MeterPointsByMeterParametersBatchReader(pyramidRestUrl, customRestTemplate, commandParametersMap, objectMapper))
-                .writer(new MeterPointsByMeterParametersBatchWriter(rabbitTemplate, objectMapper, counter))
+                .writer(new MeterPointsByMeterParametersBatchWriter(rabbitTemplate, objectMapper, outCounter))
                 .build();
     }
 
@@ -120,13 +120,13 @@ public class RestMeterBatchConfiguration {
         return stepBuilderFactory.get("stepMeterEvents")
                 .<List<EndDeviceEvent>, List<EndDeviceEvent>>chunk(chunkSize)
                 .reader(new MeterEventsReader(pyramidRestUrl, restTemplate, commandParametersMap, objectMapper))
-                .writer(new MeterEventsWriter(rabbitTemplate, objectMapper, counter))
+                .writer(new MeterEventsWriter(rabbitTemplate, objectMapper, outCounter))
                 .build();
     }
 
     @Scheduled(fixedDelayString = "60000")
     private void clearCounter() {
-        this.counter = Counter.builder("outcome_rabbitmq_package")
+        this.outCounter = Counter.builder("outcome_rabbitmq_package")
                 .description("Income package got from rabbitmq")
                 .register(meterRegistry);
     }

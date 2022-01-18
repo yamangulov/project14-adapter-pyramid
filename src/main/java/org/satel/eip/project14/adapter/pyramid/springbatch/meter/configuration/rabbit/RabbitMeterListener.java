@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.satel.eip.project14.adapter.pyramid.domain.command.CommandType;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandParametersContainer;
@@ -91,11 +90,11 @@ public class RabbitMeterListener {
 
     private final MeterRegistry meterRegistry;
     //counter for incoming rabbitmq packages
-    private Counter counter;
+    private Counter inCounter;
 
     @PostConstruct
     public void init() {
-        counter =
+        inCounter =
                 Counter.builder("income_rabbitmq_package")
                         .description("Income package got from rabbitmq")
                         .register(meterRegistry);
@@ -114,12 +113,7 @@ public class RabbitMeterListener {
     
     @Bean("inCounter")
     Counter inCounter() {
-        return this.counter;
-    }
-
-    @Bean("outCounter")
-    Counter outCounter() {
-        return this.counter;
+        return this.inCounter;
     }
 
     @RabbitListener(bindings = @QueueBinding(
@@ -130,7 +124,7 @@ public class RabbitMeterListener {
     public void listenPyramidCommands(String in) throws JobInstanceAlreadyCompleteException,
             JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException, JsonProcessingException {
 
-        counter.increment();
+        inCounter.increment();
 
         JsonNode rootNode;
         try {
@@ -218,7 +212,7 @@ public class RabbitMeterListener {
 
     @Scheduled(fixedDelayString = "60000")
     private void clearCounter() {
-        this.counter = Counter.builder("income_rabbitmq_package")
+        this.inCounter = Counter.builder("income_rabbitmq_package")
                 .description("Income package got from rabbitmq")
                 .register(meterRegistry);
     }
