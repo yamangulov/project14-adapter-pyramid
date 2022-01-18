@@ -117,6 +117,11 @@ public class RabbitMeterListener {
         return this.counter;
     }
 
+    @Bean("outCounter")
+    Counter outCounter() {
+        return this.counter;
+    }
+
     @RabbitListener(bindings = @QueueBinding(
             value = @Queue(value = "${rabbitmq.commands.queue}"),
             exchange = @Exchange(value = "${rabbitmq.MetersUuids.exchange}"),
