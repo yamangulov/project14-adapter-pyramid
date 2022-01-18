@@ -4,6 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.satel.eip.project14.adapter.pyramid.domain.command.CommandType;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandParametersContainer;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.GetMeterRequestContainer;
@@ -30,6 +33,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
+import javax.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -81,14 +85,27 @@ public class RabbitMeterListener {
 
     private final ObjectMapper objectMapper;
 
+    private final MeterRegistry meterRegistry;
+    //counter for incoming rabbitmq packages
+    private Counter counter;
+
+    @PostConstruct
+    public void init() {
+        counter =
+                Counter.builder("income_rabbitmq_package")
+                        .description("Income package got from rabbitmq")
+                        .register(meterRegistry);
+    }
+
     @Autowired
     public RabbitMeterListener(JobLauncher jobLauncher, Job getMeterJob, RabbitTemplate rabbitTemplate,
-                               ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper) {
+                               ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, MeterRegistry meterRegistry) {
         this.jobLauncher = jobLauncher;
         this.getMeterJob = getMeterJob;
         this.rabbitTemplate = rabbitTemplate;
         this.commandParametersMap = commandParametersMap;
         this.objectMapper = objectMapper;
+        this.meterRegistry = meterRegistry;
     }
 
     @RabbitListener(bindings = @QueueBinding(
@@ -98,6 +115,8 @@ public class RabbitMeterListener {
     ))
     public void listenPyramidCommands(String in) throws JobInstanceAlreadyCompleteException,
             JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException, JsonProcessingException {
+
+        counter.increment();
 
         JsonNode rootNode;
         try {

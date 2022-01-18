@@ -2,6 +2,7 @@ package org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.Counter;
 import org.satel.eip.project14.data.model.pyramid.Reading;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,10 +25,12 @@ public class MeterPointsByMeterParametersBatchWriter implements ItemWriter<List<
     private final ObjectMapper objectMapper;
     private String consolidationsQueue;
     private String consolidationsRoutingKey;
+    private Counter counter;
 
-    public MeterPointsByMeterParametersBatchWriter(RabbitTemplate rabbitTemplate, ObjectMapper objectMapper) {
+    public MeterPointsByMeterParametersBatchWriter(RabbitTemplate rabbitTemplate, ObjectMapper objectMapper, Counter counter) {
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
+        this.counter = counter;
     }
 
     @BeforeStep
@@ -70,6 +73,7 @@ public class MeterPointsByMeterParametersBatchWriter implements ItemWriter<List<
             }
             if (readingString != null) {
                 rabbitTemplate.convertAndSend(this.exchange, this.consolidationsRoutingKey, readingString);
+                counter.increment();
             }
         });
         rabbitTemplate.setDefaultReceiveQueue(defaultQueue);

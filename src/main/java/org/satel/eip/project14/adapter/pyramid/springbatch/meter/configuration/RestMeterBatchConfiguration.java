@@ -1,6 +1,8 @@
 package org.satel.eip.project14.adapter.pyramid.springbatch.meter.configuration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandParametersContainer;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.JobCompletionNotificationListener;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader.MeterEventsReader;
@@ -25,6 +27,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestTemplate;
 
+import javax.annotation.PostConstruct;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -42,11 +45,28 @@ public class RestMeterBatchConfiguration {
 
     private final ObjectMapper objectMapper;
 
+    private final MeterRegistry meterRegistry;
+    private Counter counter;
+
+    @PostConstruct
+    public void init() {
+        counter =
+                Counter.builder("outcome_rabbitmq_package")
+                        .description("Outcome package got from rabbitmq")
+                        .register(meterRegistry);
+    }
+
     @Autowired
-    public RestMeterBatchConfiguration(JobBuilderFactory jobBuilderFactory, StepBuilderFactory stepBuilderFactory, ObjectMapper objectMapper) {
+    public RestMeterBatchConfiguration(JobBuilderFactory jobBuilderFactory, StepBuilderFactory stepBuilderFactory, ObjectMapper objectMapper, MeterRegistry meterRegistry) {
         this.jobBuilderFactory = jobBuilderFactory;
         this.stepBuilderFactory = stepBuilderFactory;
         this.objectMapper = objectMapper;
+        this.meterRegistry = meterRegistry;
+    }
+
+    @Bean("counter")
+    Counter counter() {
+        return this.counter;
     }
 
     @Bean("restTemplate")
@@ -82,22 +102,22 @@ public class RestMeterBatchConfiguration {
     //endpoint GET /meterpointsbymeterparametersbatch/{parameterguid}/{dtfrom}/{dtto}
     // + extra body in GET request with {meterguid} list with comma separator in it
     @Bean
-    public Step meterPointsByMeterParametersBatchStep(@Qualifier("customRestTemplate") RestTemplate customRestTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper) {
+    public Step meterPointsByMeterParametersBatchStep(@Qualifier("customRestTemplate") RestTemplate customRestTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, Counter counter) {
         return stepBuilderFactory.get("stepMeterPointsByMeterParametersBatchStep")
                 .<List<Reading>, List<Reading>> chunk(chunkSize)
                 .reader(new MeterPointsByMeterParametersBatchReader(pyramidRestUrl, customRestTemplate, commandParametersMap, objectMapper))
-                .writer(new MeterPointsByMeterParametersBatchWriter(rabbitTemplate, objectMapper))
+                .writer(new MeterPointsByMeterParametersBatchWriter(rabbitTemplate, objectMapper, counter))
                 .build();
     }
 
     //endpoint GET /meterevents/{meterguid}/{dtfrom}/{dtto}
     @Bean
     public Step meterEventsStep(@Qualifier("restTemplate") RestTemplate restTemplate, RabbitTemplate rabbitTemplate,
-        ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper) {
+        ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, Counter counter) {
         return stepBuilderFactory.get("stepMeterEvents")
                 .<List<EndDeviceEvent>, List<EndDeviceEvent>>chunk(chunkSize)
                 .reader(new MeterEventsReader(pyramidRestUrl, restTemplate, commandParametersMap, objectMapper))
-                .writer(new MeterEventsWriter(rabbitTemplate, objectMapper))
+                .writer(new MeterEventsWriter(rabbitTemplate, objectMapper, counter))
                 .build();
     }
 
