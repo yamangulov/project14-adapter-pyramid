@@ -2,6 +2,8 @@ package org.satel.eip.project14.adapter.pyramid.endpoint;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Metrics;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
@@ -19,12 +21,9 @@ public class RabbitMQActuatorEndpoint {
     private final Counter outCounter;
     private final Counter inCounter;
 
-    @Autowired
     public RabbitMQActuatorEndpoint(@Qualifier("outCounter") Counter outCounter, @Qualifier("inCounter") Counter inCounter) {
-        this.outCounter = Metrics.globalRegistry
-                .find("outcome_rabbitmq_package").counter();
-        this.inCounter = Metrics.globalRegistry
-                .find("income_rabbitmq_package").counter();;
+        this.outCounter = outCounter;
+        this.inCounter = inCounter;
     }
 
     @ReadOperation

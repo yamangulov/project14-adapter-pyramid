@@ -126,6 +126,8 @@ public class RabbitMeterListener {
 
         inCounter.increment();
 
+        LOGGER.info("inCounter: {}", inCounter.count());
+
         JsonNode rootNode;
         try {
             rootNode = objectMapper.readTree(in);
