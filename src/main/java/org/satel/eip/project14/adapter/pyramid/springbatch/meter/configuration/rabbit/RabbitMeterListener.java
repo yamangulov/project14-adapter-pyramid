@@ -5,12 +5,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.satel.eip.project14.adapter.pyramid.domain.command.CommandType;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandParametersContainer;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.GetMeterRequestContainer;
 import org.satel.eip.project14.adapter.pyramid.domain.command.entity.GetMeterRequestCommand;
 import org.satel.eip.project14.adapter.pyramid.domain.command.response.CommandResponse;
+import org.satel.eip.project14.adapter.pyramid.wrapper.DoubleWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -89,15 +91,18 @@ public class RabbitMeterListener {
     private final ObjectMapper objectMapper;
 
     private final MeterRegistry meterRegistry;
-    //counter for incoming rabbitmq packages
     private Counter inCounter;
+    private Gauge inGauge;
 
     @PostConstruct
     public void init() {
         inCounter =
                 Counter.builder("income_rabbitmq_package")
-                        .description("Income package got from rabbitmq")
+                        .description("Income package got from RabbitMQ")
                         .register(meterRegistry);
+        inGauge = Gauge.builder("income_rabbitmq_package_resetable", this::getInGaugeCounter)
+                .description("Gauge for income message got from RabbitMQ")
+                .register(meterRegistry);
     }
 
     @Autowired
@@ -109,6 +114,15 @@ public class RabbitMeterListener {
         this.commandParametersMap = commandParametersMap;
         this.objectMapper = objectMapper;
         this.meterRegistry = meterRegistry;
+    }
+
+    @Bean("inGaugeCounter")
+    DoubleWrapper inGaugeCounter() {
+        return new DoubleWrapper(0.0);
+    }
+
+    Double getInGaugeCounter() {
+        return inGaugeCounter().getValue();
     }
     
     @Bean("inCounter")
@@ -125,6 +139,8 @@ public class RabbitMeterListener {
             JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException, JsonProcessingException {
 
         inCounter.increment();
+        inGaugeCounter().setValue(inGaugeCounter().getValue() + 1.0);
+        inGauge.measure();
 
         LOGGER.info("inCounter: {}", inCounter.count());
 
@@ -212,11 +228,10 @@ public class RabbitMeterListener {
         rabbitTemplate.setDefaultReceiveQueue(defaultQueue);
     }
 
-    @Scheduled(fixedDelayString = "60000")
-    private void clearCounter() {
-        this.inCounter = Counter.builder("income_rabbitmq_package")
-                .description("Income package got from rabbitmq")
-                .register(meterRegistry);
+    @Scheduled(fixedDelayString = "180000")
+    private void clearGaugeCounter() {
+        inGaugeCounter().setValue(0.0);
+        inGauge.measure();
     }
 
 }

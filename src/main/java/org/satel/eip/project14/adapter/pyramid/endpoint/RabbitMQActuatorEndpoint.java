@@ -1,10 +1,7 @@
 package org.satel.eip.project14.adapter.pyramid.endpoint;
 
 import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.Metrics;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.satel.eip.project14.adapter.pyramid.wrapper.DoubleWrapper;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
 import org.springframework.boot.actuate.endpoint.annotation.ReadOperation;
@@ -20,10 +17,14 @@ public class RabbitMQActuatorEndpoint {
 
     private final Counter outCounter;
     private final Counter inCounter;
+    private final DoubleWrapper inGaugeCounter;
+    private final DoubleWrapper outGaugeCounter;
 
-    public RabbitMQActuatorEndpoint(@Qualifier("outCounter") Counter outCounter, @Qualifier("inCounter") Counter inCounter) {
+    public RabbitMQActuatorEndpoint(@Qualifier("outCounter") Counter outCounter, @Qualifier("inCounter") Counter inCounter, @Qualifier("inGaugeCounter") DoubleWrapper inGaugeCounter, @Qualifier("outGaugeCounter") DoubleWrapper outGaugeCounter) {
         this.outCounter = outCounter;
         this.inCounter = inCounter;
+        this.inGaugeCounter = inGaugeCounter;
+        this.outGaugeCounter = outGaugeCounter;
     }
 
     @ReadOperation
@@ -31,6 +32,8 @@ public class RabbitMQActuatorEndpoint {
         Map<String, Double> counters = new ConcurrentHashMap<>();
         counters.put("outcome_rabbitmq_package", outCounter != null ? outCounter.count() : 0);
         counters.put("income_rabbitmq_package", inCounter != null ? inCounter.count() : 0);
+        counters.put("outcome_rabbitmq_package_resetable", outGaugeCounter.getValue());
+        counters.put("income_rabbitmq_package_resetable", inGaugeCounter.getValue());
         return counters;
     }
 

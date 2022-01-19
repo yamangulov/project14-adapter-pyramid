@@ -3,6 +3,8 @@ package org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import org.satel.eip.project14.adapter.pyramid.wrapper.DoubleWrapper;
 import org.satel.eip.project14.data.model.pyramid.Reading;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,11 +28,15 @@ public class MeterPointsByMeterParametersBatchWriter implements ItemWriter<List<
     private String consolidationsQueue;
     private String consolidationsRoutingKey;
     private final Counter outCounter;
+    private DoubleWrapper outGaugeCounter;
+    private final Gauge outGauge;
 
-    public MeterPointsByMeterParametersBatchWriter(RabbitTemplate rabbitTemplate, ObjectMapper objectMapper, Counter outCounter) {
+    public MeterPointsByMeterParametersBatchWriter(RabbitTemplate rabbitTemplate, ObjectMapper objectMapper, Counter outCounter, DoubleWrapper outGaugeCounter, Gauge outGauge) {
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
         this.outCounter = outCounter;
+        this.outGaugeCounter = outGaugeCounter;
+        this.outGauge = outGauge;
     }
 
     @BeforeStep
@@ -74,6 +80,8 @@ public class MeterPointsByMeterParametersBatchWriter implements ItemWriter<List<
             if (readingString != null) {
                 rabbitTemplate.convertAndSend(this.exchange, this.consolidationsRoutingKey, readingString);
                 outCounter.increment();
+                outGaugeCounter.setValue(outGaugeCounter.getValue() + 1.0);
+                outGauge.measure();
             }
         });
         rabbitTemplate.setDefaultReceiveQueue(defaultQueue);

@@ -2,6 +2,7 @@ package org.satel.eip.project14.adapter.pyramid.springbatch.meter.configuration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandParametersContainer;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.JobCompletionNotificationListener;
@@ -10,6 +11,7 @@ import org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader.MeterPoi
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.request.CustomHttpComponentsClientHttpRequestFactory;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer.MeterEventsWriter;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer.MeterPointsByMeterParametersBatchWriter;
+import org.satel.eip.project14.adapter.pyramid.wrapper.DoubleWrapper;
 import org.satel.eip.project14.data.model.pyramid.EndDeviceEvent;
 import org.satel.eip.project14.data.model.pyramid.Reading;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
@@ -25,6 +27,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.client.RestTemplate;
@@ -50,6 +53,7 @@ public class RestMeterBatchConfiguration {
 
     private final MeterRegistry meterRegistry;
     private Counter outCounter;
+    private Gauge outGauge;
 
     @PostConstruct
     public void init() {
@@ -57,6 +61,10 @@ public class RestMeterBatchConfiguration {
                 Counter.builder("outcome_rabbitmq_package")
                         .description("Outcome package got from rabbitmq")
                         .register(meterRegistry);
+        outGauge =
+                Gauge.builder("outcome_rabbitmq_package_resetable", this::getOutGaugeCounter)
+                .description("Gauge for outcome message got from RabbitMQ")
+                .register(meterRegistry);
     }
 
     @Autowired
@@ -65,6 +73,20 @@ public class RestMeterBatchConfiguration {
         this.stepBuilderFactory = stepBuilderFactory;
         this.objectMapper = objectMapper;
         this.meterRegistry = meterRegistry;
+    }
+
+    @Bean("outGauge")
+    public Gauge outGauge() {
+        return outGauge;
+    }
+
+    @Bean("outGaugeCounter")
+    public DoubleWrapper outGaugeCounter() {
+        return new DoubleWrapper(0.0);
+    }
+
+    private Double getOutGaugeCounter() {
+        return outGaugeCounter().getValue();
     }
 
     @Bean("outCounter")
@@ -105,30 +127,29 @@ public class RestMeterBatchConfiguration {
     //endpoint GET /meterpointsbymeterparametersbatch/{parameterguid}/{dtfrom}/{dtto}
     // + extra body in GET request with {meterguid} list with comma separator in it
     @Bean
-    public Step meterPointsByMeterParametersBatchStep(@Qualifier("customRestTemplate") RestTemplate customRestTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, @Qualifier("outCounter") Counter outCounter) {
+    public Step meterPointsByMeterParametersBatchStep(@Qualifier("customRestTemplate") RestTemplate customRestTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, @Qualifier("outCounter") Counter outCounter, @Qualifier("outGaugeCounter") DoubleWrapper outGaugeCounter, @Qualifier("outGauge") Gauge outGauge) {
         return stepBuilderFactory.get("stepMeterPointsByMeterParametersBatchStep")
                 .<List<Reading>, List<Reading>> chunk(chunkSize)
                 .reader(new MeterPointsByMeterParametersBatchReader(pyramidRestUrl, customRestTemplate, commandParametersMap, objectMapper))
-                .writer(new MeterPointsByMeterParametersBatchWriter(rabbitTemplate, objectMapper, outCounter))
+                .writer(new MeterPointsByMeterParametersBatchWriter(rabbitTemplate, objectMapper, outCounter, outGaugeCounter, outGauge))
                 .build();
     }
 
     //endpoint GET /meterevents/{meterguid}/{dtfrom}/{dtto}
     @Bean
     public Step meterEventsStep(@Qualifier("restTemplate") RestTemplate restTemplate, RabbitTemplate rabbitTemplate,
-        ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, @Qualifier("outCounter") Counter outCounter) {
+        ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, @Qualifier("outCounter") Counter outCounter, @Qualifier("outGaugeCounter") DoubleWrapper outGaugeCounter, @Qualifier("outGauge") Gauge outGauge) {
         return stepBuilderFactory.get("stepMeterEvents")
                 .<List<EndDeviceEvent>, List<EndDeviceEvent>>chunk(chunkSize)
                 .reader(new MeterEventsReader(pyramidRestUrl, restTemplate, commandParametersMap, objectMapper))
-                .writer(new MeterEventsWriter(rabbitTemplate, objectMapper, outCounter))
+                .writer(new MeterEventsWriter(rabbitTemplate, objectMapper, outCounter, outGaugeCounter, outGauge))
                 .build();
     }
 
-    @Scheduled(fixedDelayString = "60000")
-    private void clearCounter() {
-        this.outCounter = Counter.builder("outcome_rabbitmq_package")
-                .description("Income package got from rabbitmq")
-                .register(meterRegistry);
+    @Scheduled(fixedDelayString = "180000")
+    private void clearGaugeCounter() {
+        outGaugeCounter().setValue(0.0);
+        outGauge.measure();
     }
 
 }
