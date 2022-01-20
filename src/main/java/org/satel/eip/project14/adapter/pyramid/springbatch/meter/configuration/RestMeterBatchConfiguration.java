@@ -25,9 +25,9 @@ import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.client.RestTemplate;
@@ -39,6 +39,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Configuration
 @EnableBatchProcessing
 @EnableScheduling
+@RefreshScope
 public class RestMeterBatchConfiguration {
     @Value("${pyramid.rest.url}")
     private String pyramidRestUrl;
@@ -80,6 +81,7 @@ public class RestMeterBatchConfiguration {
         return outGauge;
     }
 
+    // Реализацию этого класса или другого, используемого на его месте, желательно сделать потокобезопасным
     @Bean("outGaugeCounter")
     public DoubleWrapper outGaugeCounter() {
         return new DoubleWrapper(0.0);
@@ -146,7 +148,7 @@ public class RestMeterBatchConfiguration {
                 .build();
     }
 
-    @Scheduled(fixedDelayString = "180000")
+    @Scheduled(fixedDelayString = "60000")
     private void clearGaugeCounter() {
         outGaugeCounter().setValue(0.0);
         outGauge.measure();

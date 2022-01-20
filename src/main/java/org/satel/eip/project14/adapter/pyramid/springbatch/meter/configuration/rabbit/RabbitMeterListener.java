@@ -32,6 +32,7 @@ import org.springframework.batch.core.repository.JobInstanceAlreadyCompleteExcep
 import org.springframework.batch.core.repository.JobRestartException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -43,6 +44,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Configuration
 @EnableScheduling
+@RefreshScope
 public class RabbitMeterListener {
     static final Logger LOGGER = LoggerFactory.getLogger(RabbitMeterListener.class);
 
@@ -228,7 +230,7 @@ public class RabbitMeterListener {
         rabbitTemplate.setDefaultReceiveQueue(defaultQueue);
     }
 
-    @Scheduled(fixedDelayString = "180000")
+    @Scheduled(fixedDelayString = "60000")
     private void clearGaugeCounter() {
         inGaugeCounter().setValue(0.0);
         inGauge.measure();
