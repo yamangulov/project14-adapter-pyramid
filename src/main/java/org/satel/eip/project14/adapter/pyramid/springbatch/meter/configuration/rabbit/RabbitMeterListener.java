@@ -12,7 +12,6 @@ import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandP
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.GetMeterRequestContainer;
 import org.satel.eip.project14.adapter.pyramid.domain.command.entity.GetMeterRequestCommand;
 import org.satel.eip.project14.adapter.pyramid.domain.command.response.CommandResponse;
-import org.satel.eip.project14.adapter.pyramid.wrapper.DoubleWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -41,6 +40,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import javax.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.DoubleAccumulator;
 
 @Configuration
 @EnableScheduling
@@ -119,12 +119,12 @@ public class RabbitMeterListener {
     }
 
     @Bean("inGaugeCounter")
-    DoubleWrapper inGaugeCounter() {
-        return new DoubleWrapper(0.0);
+    DoubleAccumulator inGaugeCounter() {
+        return new DoubleAccumulator(Double::sum, 0);
     }
 
     Double getInGaugeCounter() {
-        return inGaugeCounter().getValue();
+        return inGaugeCounter().get();
     }
     
     @Bean("inCounter")
@@ -141,7 +141,7 @@ public class RabbitMeterListener {
             JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException, JsonProcessingException {
 
         inCounter.increment();
-        inGaugeCounter().setValue(inGaugeCounter().getValue() + 1.0);
+        inGaugeCounter().accumulate(1.0);
         inGauge.measure();
 
         LOGGER.info("inCounter: {}", inCounter.count());
@@ -232,7 +232,7 @@ public class RabbitMeterListener {
 
     @Scheduled(fixedDelayString = "60000")
     private void clearGaugeCounter() {
-        inGaugeCounter().setValue(0.0);
+        inGaugeCounter().reset();
         inGauge.measure();
     }
 

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
-import org.satel.eip.project14.adapter.pyramid.wrapper.DoubleWrapper;
 import org.satel.eip.project14.data.model.pyramid.EndDeviceEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +14,7 @@ import org.springframework.batch.item.ItemWriter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.DoubleAccumulator;
 
 public class MeterEventsWriter implements ItemWriter<List<EndDeviceEvent>> {
     private static final Logger LOGGER = LoggerFactory.getLogger(MeterEventsWriter.class);
@@ -28,10 +28,10 @@ public class MeterEventsWriter implements ItemWriter<List<EndDeviceEvent>> {
     private String consolidationsQueue;
     private String consolidationsRoutingKey;
     private final Counter outCounter;
-    private DoubleWrapper outGaugeCounter;
+    private DoubleAccumulator outGaugeCounter;
     private final Gauge outGauge;
 
-    public MeterEventsWriter(RabbitTemplate rabbitTemplate, ObjectMapper objectMapper, Counter outCounter, DoubleWrapper outGaugeCounter, Gauge outGauge) {
+    public MeterEventsWriter(RabbitTemplate rabbitTemplate, ObjectMapper objectMapper, Counter outCounter, DoubleAccumulator outGaugeCounter, Gauge outGauge) {
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
         this.outCounter = outCounter;
@@ -80,7 +80,7 @@ public class MeterEventsWriter implements ItemWriter<List<EndDeviceEvent>> {
             if (readingString != null) {
                 rabbitTemplate.convertAndSend(this.exchange, this.consolidationsRoutingKey, readingString);
                 outCounter.increment();
-                outGaugeCounter.setValue(outGaugeCounter.getValue() + 1.0);
+                outGaugeCounter.accumulate(1.0);
                 outGauge.measure();
             }
         });

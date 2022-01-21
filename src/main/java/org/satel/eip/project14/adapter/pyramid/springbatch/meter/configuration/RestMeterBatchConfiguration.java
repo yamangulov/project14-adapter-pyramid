@@ -11,7 +11,6 @@ import org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader.MeterPoi
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.request.CustomHttpComponentsClientHttpRequestFactory;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer.MeterEventsWriter;
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer.MeterPointsByMeterParametersBatchWriter;
-import org.satel.eip.project14.adapter.pyramid.wrapper.DoubleWrapper;
 import org.satel.eip.project14.data.model.pyramid.EndDeviceEvent;
 import org.satel.eip.project14.data.model.pyramid.Reading;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
@@ -35,6 +34,7 @@ import org.springframework.web.client.RestTemplate;
 import javax.annotation.PostConstruct;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.DoubleAccumulator;
 
 @Configuration
 @EnableBatchProcessing
@@ -81,14 +81,14 @@ public class RestMeterBatchConfiguration {
         return outGauge;
     }
 
-    // Реализацию этого класса или другого, используемого на его месте, желательно сделать потокобезопасным
+    // Реализацию этого класса или другого, используемого на его месте, нужно делать потокобезопасным
     @Bean("outGaugeCounter")
-    public DoubleWrapper outGaugeCounter() {
-        return new DoubleWrapper(0.0);
+    public DoubleAccumulator outGaugeCounter() {
+        return new DoubleAccumulator(Double::sum, 0);
     }
 
     private Double getOutGaugeCounter() {
-        return outGaugeCounter().getValue();
+        return outGaugeCounter().get();
     }
 
     @Bean("outCounter")
@@ -101,12 +101,14 @@ public class RestMeterBatchConfiguration {
         return new RestTemplate();
     }
 
+    // @RefreshScope не работает в этом классе, если оставить дефолтовое имя RestTemplate, так как с @RefreshScope
+    // Spring создает два шаблона с одинаковым именем - из автоконфигурации Spring и из данного кастомного определения бина
     @Bean("customRestTemplate")
     RestTemplate customRestTemplate() {
         return new RestTemplate(new CustomHttpComponentsClientHttpRequestFactory());
     }
 
-    @Bean
+    @Bean("customRabbitTemplate")
     RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory) {
         return new RabbitTemplate(connectionFactory);
     }
@@ -117,10 +119,10 @@ public class RestMeterBatchConfiguration {
     }
 
     @Bean
-    public Job getMeterJob(Step meterPointsByMeterParametersBatchStep, Step meterEventsStep, RabbitTemplate rabbitTemplate) {
+    public Job getMeterJob(Step meterPointsByMeterParametersBatchStep, Step meterEventsStep, RabbitTemplate customRabbitTemplate) {
         return jobBuilderFactory.get("pyramidJob")
                 .incrementer(new RunIdIncrementer())
-                .listener(new JobCompletionNotificationListener(rabbitTemplate))
+                .listener(new JobCompletionNotificationListener(customRabbitTemplate))
                 .start(meterPointsByMeterParametersBatchStep)
                 .next(meterEventsStep)
                 .build();
@@ -129,28 +131,28 @@ public class RestMeterBatchConfiguration {
     //endpoint GET /meterpointsbymeterparametersbatch/{parameterguid}/{dtfrom}/{dtto}
     // + extra body in GET request with {meterguid} list with comma separator in it
     @Bean
-    public Step meterPointsByMeterParametersBatchStep(@Qualifier("customRestTemplate") RestTemplate customRestTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, @Qualifier("outCounter") Counter outCounter, @Qualifier("outGaugeCounter") DoubleWrapper outGaugeCounter, @Qualifier("outGauge") Gauge outGauge) {
+    public Step meterPointsByMeterParametersBatchStep(@Qualifier("customRestTemplate") RestTemplate customRestTemplate, RabbitTemplate customRabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, @Qualifier("outCounter") Counter outCounter, @Qualifier("outGaugeCounter") DoubleAccumulator outGaugeCounter, @Qualifier("outGauge") Gauge outGauge) {
         return stepBuilderFactory.get("stepMeterPointsByMeterParametersBatchStep")
                 .<List<Reading>, List<Reading>> chunk(chunkSize)
                 .reader(new MeterPointsByMeterParametersBatchReader(pyramidRestUrl, customRestTemplate, commandParametersMap, objectMapper))
-                .writer(new MeterPointsByMeterParametersBatchWriter(rabbitTemplate, objectMapper, outCounter, outGaugeCounter, outGauge))
+                .writer(new MeterPointsByMeterParametersBatchWriter(customRabbitTemplate, objectMapper, outCounter, outGaugeCounter, outGauge))
                 .build();
     }
 
     //endpoint GET /meterevents/{meterguid}/{dtfrom}/{dtto}
     @Bean
-    public Step meterEventsStep(@Qualifier("restTemplate") RestTemplate restTemplate, RabbitTemplate rabbitTemplate,
-        ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, @Qualifier("outCounter") Counter outCounter, @Qualifier("outGaugeCounter") DoubleWrapper outGaugeCounter, @Qualifier("outGauge") Gauge outGauge) {
+    public Step meterEventsStep(@Qualifier("restTemplate") RestTemplate restTemplate, RabbitTemplate customRabbitTemplate,
+        ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, @Qualifier("outCounter") Counter outCounter, @Qualifier("outGaugeCounter") DoubleAccumulator outGaugeCounter, @Qualifier("outGauge") Gauge outGauge) {
         return stepBuilderFactory.get("stepMeterEvents")
                 .<List<EndDeviceEvent>, List<EndDeviceEvent>>chunk(chunkSize)
                 .reader(new MeterEventsReader(pyramidRestUrl, restTemplate, commandParametersMap, objectMapper))
-                .writer(new MeterEventsWriter(rabbitTemplate, objectMapper, outCounter, outGaugeCounter, outGauge))
+                .writer(new MeterEventsWriter(customRabbitTemplate, objectMapper, outCounter, outGaugeCounter, outGauge))
                 .build();
     }
 
     @Scheduled(fixedDelayString = "60000")
     private void clearGaugeCounter() {
-        outGaugeCounter().setValue(0.0);
+        outGaugeCounter().reset();
         outGauge.measure();
     }
 
