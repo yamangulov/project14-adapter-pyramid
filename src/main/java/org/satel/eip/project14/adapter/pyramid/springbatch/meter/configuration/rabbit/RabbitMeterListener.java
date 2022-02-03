@@ -132,7 +132,7 @@ public class RabbitMeterListener {
         return this.inCounter;
     }
 
-    @RabbitListener(bindings = @QueueBinding(
+    @RabbitListener(id = "pyramidCommandListener", bindings = @QueueBinding(
             value = @Queue(value = "${rabbitmq.commands.queue}"),
             exchange = @Exchange(value = "${rabbitmq.MetersUuids.exchange}"),
             key = "${rabbitmq.MetersUuids.routingKey}"

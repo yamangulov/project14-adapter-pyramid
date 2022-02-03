@@ -119,6 +119,7 @@ public class RestMeterBatchConfiguration {
     }
 
     @Bean
+    @RefreshScope
     public Job getMeterJob(Step meterPointsByMeterParametersBatchStep, Step meterEventsStep, RabbitTemplate customRabbitTemplate) {
         return jobBuilderFactory.get("pyramidJob")
                 .incrementer(new RunIdIncrementer())
@@ -131,6 +132,7 @@ public class RestMeterBatchConfiguration {
     //endpoint GET /meterpointsbymeterparametersbatch/{parameterguid}/{dtfrom}/{dtto}
     // + extra body in GET request with {meterguid} list with comma separator in it
     @Bean
+    @RefreshScope
     public Step meterPointsByMeterParametersBatchStep(@Qualifier("customRestTemplate") RestTemplate customRestTemplate, RabbitTemplate customRabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, @Qualifier("outCounter") Counter outCounter, @Qualifier("outGaugeCounter") DoubleAccumulator outGaugeCounter, @Qualifier("outGauge") Gauge outGauge) {
         return stepBuilderFactory.get("stepMeterPointsByMeterParametersBatchStep")
                 .<List<Reading>, List<Reading>> chunk(chunkSize)
@@ -141,6 +143,7 @@ public class RestMeterBatchConfiguration {
 
     //endpoint GET /meterevents/{meterguid}/{dtfrom}/{dtto}
     @Bean
+    @RefreshScope
     public Step meterEventsStep(@Qualifier("restTemplate") RestTemplate restTemplate, RabbitTemplate customRabbitTemplate,
         ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, @Qualifier("outCounter") Counter outCounter, @Qualifier("outGaugeCounter") DoubleAccumulator outGaugeCounter, @Qualifier("outGauge") Gauge outGauge) {
         return stepBuilderFactory.get("stepMeterEvents")
