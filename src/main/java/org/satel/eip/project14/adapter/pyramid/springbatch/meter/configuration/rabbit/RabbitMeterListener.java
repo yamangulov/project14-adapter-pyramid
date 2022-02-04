@@ -7,20 +7,19 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import lombok.extern.slf4j.Slf4j;
 import org.satel.eip.project14.adapter.pyramid.domain.command.CommandType;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandParametersContainer;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.GetMeterRequestContainer;
 import org.satel.eip.project14.adapter.pyramid.domain.command.entity.GetMeterRequestCommand;
 import org.satel.eip.project14.adapter.pyramid.domain.command.response.CommandResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
-import org.springframework.amqp.rabbit.annotation.Exchange;
-import org.springframework.amqp.rabbit.annotation.Queue;
-import org.springframework.amqp.rabbit.annotation.QueueBinding;
-import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
@@ -30,6 +29,7 @@ import org.springframework.batch.core.repository.JobExecutionAlreadyRunningExcep
 import org.springframework.batch.core.repository.JobInstanceAlreadyCompleteException;
 import org.springframework.batch.core.repository.JobRestartException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.context.annotation.Bean;
@@ -42,11 +42,11 @@ import java.time.LocalDateTime;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.DoubleAccumulator;
 
+@Slf4j
 @Configuration
 @EnableScheduling
 @RefreshScope
 public class RabbitMeterListener {
-    static final Logger LOGGER = LoggerFactory.getLogger(RabbitMeterListener.class);
 
     @Value("${rabbitmq.MetersUuids.exchange}")
     private String metersUuidsExchange;
@@ -108,7 +108,7 @@ public class RabbitMeterListener {
     }
 
     @Autowired
-    public RabbitMeterListener(JobLauncher jobLauncher, Job getMeterJob, RabbitTemplate rabbitTemplate,
+    public RabbitMeterListener(JobLauncher jobLauncher, Job getMeterJob, @Qualifier("rabbitTemplate") RabbitTemplate rabbitTemplate,
                                ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, MeterRegistry meterRegistry) {
         this.jobLauncher = jobLauncher;
         this.getMeterJob = getMeterJob;
@@ -132,42 +132,42 @@ public class RabbitMeterListener {
         return this.inCounter;
     }
 
-    @RabbitListener(id = "pyramidCommandListener", bindings = @QueueBinding(
-            value = @Queue(value = "${rabbitmq.commands.queue}"),
-            exchange = @Exchange(value = "${rabbitmq.MetersUuids.exchange}"),
-            key = "${rabbitmq.MetersUuids.routingKey}"
-    ))
-    public void listenPyramidCommands(String in) throws JobInstanceAlreadyCompleteException,
-            JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException, JsonProcessingException {
+    // Этот функционал реализован ниже в бине SimpleMessageListenerContainer
+    //    @RabbitListener(id = "pyramidCommandListener", bindings = @QueueBinding(
+    //            value = @Queue(value = "${rabbitmq.commands.queue}"),
+    //            exchange = @Exchange(value = "${rabbitmq.MetersUuids.exchange}"),
+    //            key = "${rabbitmq.MetersUuids.routingKey}"
+    //    ))
+    public void listenPyramidCommands(String in) throws JsonProcessingException {
 
         inCounter.increment();
         inGaugeCounter().accumulate(1.0);
         inGauge.measure();
 
-        LOGGER.info("inCounter: {}", inCounter.count());
+        log.info("inCounter: {}", inCounter.count());
 
         JsonNode rootNode;
         try {
             rootNode = objectMapper.readTree(in);
         } catch (Exception e) {
-            LOGGER.error("BAD ON READING COMMAND: {}", e.getMessage());
+            log.error("BAD ON READING COMMAND: {}", e.getMessage());
             sendBadCommandResponse(null, "BAD ON READING COMMAND FROM RABBIT");
             return;
         }
 
         String commandUuid = rootNode.get("uuid") == null ? null : rootNode.get("uuid").asText();
         if (commandUuid == null || commandUuid.isEmpty()) {
-            LOGGER.error("EMPTY COMMAND UUID");
+            log.error("EMPTY COMMAND UUID");
             sendBadCommandResponse(commandUuid, "EMPTY COMMAND UUID");
             return;
         }
         MDC.put("commandUuid", commandUuid);
-        LOGGER.info(in);
+        log.info(in);
 
         CommandType commandType = CommandType.getCommandTypeByString(rootNode.get("commandType").asText());
 
         if (commandType == null) {
-            LOGGER.error("UNKNOWN COMMAND {} GOT FROM RABBITMQ", commandType);
+            log.error("UNKNOWN COMMAND {} GOT FROM RABBITMQ", commandType);
             sendBadCommandResponse(rootNode.get("commandType").asText(), "UNKNOWN COMMAND");
             return;
         }
@@ -176,14 +176,33 @@ public class RabbitMeterListener {
             try {
                 processGetPyramidMetersJob(objectMapper, in);
             } catch (Exception e) {
-                LOGGER.error("ERROR ON EXECUTING COMMAND IN BATCH JOB {}", commandType);
+                log.error("ERROR ON EXECUTING COMMAND IN BATCH JOB {}", commandType);
                 sendBadCommandResponse(commandType.getName(), "ERROR ON EXECUTING COMMAND IN BATCH JOB");
             }
         } else {
-            LOGGER.error("NOT SUFFICIENT FOR PYRAMID COMMAND {} GOT FROM RABBITMQ", commandType);
+            log.error("NOT SUFFICIENT FOR PYRAMID COMMAND {} GOT FROM RABBITMQ", commandType);
             sendBadCommandResponse(rootNode.get("commandType").asText(), "NOT SUFFICIENT FOR PYRAMID COMMAND");
         }
 
+    }
+
+    public void pyramidCommandListener(Message message) {
+        String in = new String(message.getBody());
+        try {
+            listenPyramidCommands(in);
+        } catch (JsonProcessingException e) {
+            log.error("Ошибка при конвертации в строку входящей команды из очереди {}", defaultQueue);
+        }
+    }
+
+    @Bean
+    @RefreshScope
+    public SimpleMessageListenerContainer simpleMessageListenerContainer(ConnectionFactory connectionFactory, Queue inputCommandQueue) {
+        SimpleMessageListenerContainer simpleMessageListenerContainer = new SimpleMessageListenerContainer(connectionFactory);
+        simpleMessageListenerContainer.addQueues(inputCommandQueue);
+        simpleMessageListenerContainer.setMessageListener(this::pyramidCommandListener);
+        simpleMessageListenerContainer.start();
+        return simpleMessageListenerContainer;
     }
 
     private void processGetPyramidMetersJob(ObjectMapper mapper, String in) throws JsonProcessingException,
@@ -220,7 +239,7 @@ public class RabbitMeterListener {
 
         MDC.put("commandUuid", externalJobId);
         MDC.put("operation", "Write command result");
-        LOGGER.info(result);
+        log.info(result);
 
         rabbitTemplate.setDefaultReceiveQueue(badCommandQueue);
         rabbitTemplate.convertAndSend(this.badCommandExchange, this.badCommandRoutingKey, result, m -> {

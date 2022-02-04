@@ -13,7 +13,6 @@ import org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer.MeterEve
 import org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer.MeterPointsByMeterParametersBatchWriter;
 import org.satel.eip.project14.data.model.pyramid.EndDeviceEvent;
 import org.satel.eip.project14.data.model.pyramid.Reading;
-import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -101,16 +100,9 @@ public class RestMeterBatchConfiguration {
         return new RestTemplate();
     }
 
-    // @RefreshScope не работает в этом классе, если оставить дефолтовое имя RestTemplate, так как с @RefreshScope
-    // Spring создает два шаблона с одинаковым именем - из автоконфигурации Spring и из данного кастомного определения бина
     @Bean("customRestTemplate")
     RestTemplate customRestTemplate() {
         return new RestTemplate(new CustomHttpComponentsClientHttpRequestFactory());
-    }
-
-    @Bean("customRabbitTemplate")
-    RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory) {
-        return new RabbitTemplate(connectionFactory);
     }
 
     @Bean("commandParametersMap")
@@ -120,10 +112,10 @@ public class RestMeterBatchConfiguration {
 
     @Bean
     @RefreshScope
-    public Job getMeterJob(Step meterPointsByMeterParametersBatchStep, Step meterEventsStep, RabbitTemplate customRabbitTemplate) {
+    public Job getMeterJob(Step meterPointsByMeterParametersBatchStep, Step meterEventsStep, RabbitTemplate rabbitTemplate) {
         return jobBuilderFactory.get("pyramidJob")
                 .incrementer(new RunIdIncrementer())
-                .listener(new JobCompletionNotificationListener(customRabbitTemplate))
+                .listener(new JobCompletionNotificationListener(rabbitTemplate))
                 .start(meterPointsByMeterParametersBatchStep)
                 .next(meterEventsStep)
                 .build();
@@ -133,23 +125,23 @@ public class RestMeterBatchConfiguration {
     // + extra body in GET request with {meterguid} list with comma separator in it
     @Bean
     @RefreshScope
-    public Step meterPointsByMeterParametersBatchStep(@Qualifier("customRestTemplate") RestTemplate customRestTemplate, RabbitTemplate customRabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, @Qualifier("outCounter") Counter outCounter, @Qualifier("outGaugeCounter") DoubleAccumulator outGaugeCounter, @Qualifier("outGauge") Gauge outGauge) {
+    public Step meterPointsByMeterParametersBatchStep(@Qualifier("customRestTemplate") RestTemplate customRestTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, @Qualifier("outCounter") Counter outCounter, @Qualifier("outGaugeCounter") DoubleAccumulator outGaugeCounter, @Qualifier("outGauge") Gauge outGauge) {
         return stepBuilderFactory.get("stepMeterPointsByMeterParametersBatchStep")
                 .<List<Reading>, List<Reading>> chunk(chunkSize)
                 .reader(new MeterPointsByMeterParametersBatchReader(pyramidRestUrl, customRestTemplate, commandParametersMap, objectMapper))
-                .writer(new MeterPointsByMeterParametersBatchWriter(customRabbitTemplate, objectMapper, outCounter, outGaugeCounter, outGauge))
+                .writer(new MeterPointsByMeterParametersBatchWriter(rabbitTemplate, objectMapper, outCounter, outGaugeCounter, outGauge))
                 .build();
     }
 
     //endpoint GET /meterevents/{meterguid}/{dtfrom}/{dtto}
     @Bean
     @RefreshScope
-    public Step meterEventsStep(@Qualifier("restTemplate") RestTemplate restTemplate, RabbitTemplate customRabbitTemplate,
+    public Step meterEventsStep(@Qualifier("restTemplate") RestTemplate restTemplate, RabbitTemplate rabbitTemplate,
         ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, @Qualifier("outCounter") Counter outCounter, @Qualifier("outGaugeCounter") DoubleAccumulator outGaugeCounter, @Qualifier("outGauge") Gauge outGauge) {
         return stepBuilderFactory.get("stepMeterEvents")
                 .<List<EndDeviceEvent>, List<EndDeviceEvent>>chunk(chunkSize)
                 .reader(new MeterEventsReader(pyramidRestUrl, restTemplate, commandParametersMap, objectMapper))
-                .writer(new MeterEventsWriter(customRabbitTemplate, objectMapper, outCounter, outGaugeCounter, outGauge))
+                .writer(new MeterEventsWriter(rabbitTemplate, objectMapper, outCounter, outGaugeCounter, outGauge))
                 .build();
     }
 
