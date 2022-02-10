@@ -32,4 +32,6 @@ public final class RabbitConstant {
     public static final String PYRAMID_REST_URI = "${pyramid.rest.url}";
     public static final String CHUNK_SIZE = "${commands.GetMeter.limit:20}";
 
+    private RabbitConstant() {
+    }
 }
