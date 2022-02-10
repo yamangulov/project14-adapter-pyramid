@@ -17,7 +17,7 @@ spring:
           password: actuator
           roles: ACTUATOR_ADMIN
 server:
-    port: 8081
+    port: 8082
 
 
 #actuator minimal settings - don't move into config-server, because they need for refreshing properties by default

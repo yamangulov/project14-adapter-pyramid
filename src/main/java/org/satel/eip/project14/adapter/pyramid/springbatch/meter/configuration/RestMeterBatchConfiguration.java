@@ -112,10 +112,10 @@ public class RestMeterBatchConfiguration {
 
     @Bean
     @RefreshScope
-    public Job getMeterJob(Step meterPointsByMeterParametersBatchStep, Step meterEventsStep, RabbitTemplate rabbitTemplate) {
+    public Job getMeterJob(Step meterPointsByMeterParametersBatchStep, Step meterEventsStep, @Qualifier("rabbitTemplateSuccessCommand") RabbitTemplate rabbitTemplateSuccessCommand) {
         return jobBuilderFactory.get("pyramidJob")
                 .incrementer(new RunIdIncrementer())
-                .listener(new JobCompletionNotificationListener(rabbitTemplate))
+                .listener(new JobCompletionNotificationListener(rabbitTemplateSuccessCommand))
                 .start(meterPointsByMeterParametersBatchStep)
                 .next(meterEventsStep)
                 .build();
@@ -125,23 +125,22 @@ public class RestMeterBatchConfiguration {
     // + extra body in GET request with {meterguid} list with comma separator in it
     @Bean
     @RefreshScope
-    public Step meterPointsByMeterParametersBatchStep(@Qualifier("customRestTemplate") RestTemplate customRestTemplate, RabbitTemplate rabbitTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, @Qualifier("outCounter") Counter outCounter, @Qualifier("outGaugeCounter") DoubleAccumulator outGaugeCounter, @Qualifier("outGauge") Gauge outGauge) {
+    public Step meterPointsByMeterParametersBatchStep(@Qualifier("customRestTemplate") RestTemplate customRestTemplate, @Qualifier("rabbitTemplateMeterReadings") RabbitTemplate rabbitTemplateMeterReadings, @Qualifier("rabbitTemplateConsolidations") RabbitTemplate rabbitTemplateConsolidations, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, @Qualifier("outCounter") Counter outCounter, @Qualifier("outGaugeCounter") DoubleAccumulator outGaugeCounter, @Qualifier("outGauge") Gauge outGauge) {
         return stepBuilderFactory.get("stepMeterPointsByMeterParametersBatchStep")
                 .<List<Reading>, List<Reading>> chunk(chunkSize)
                 .reader(new MeterPointsByMeterParametersBatchReader(pyramidRestUrl, customRestTemplate, commandParametersMap, objectMapper))
-                .writer(new MeterPointsByMeterParametersBatchWriter(rabbitTemplate, objectMapper, outCounter, outGaugeCounter, outGauge))
+                .writer(new MeterPointsByMeterParametersBatchWriter(rabbitTemplateMeterReadings, rabbitTemplateConsolidations, objectMapper, outCounter, outGaugeCounter, outGauge))
                 .build();
     }
 
     //endpoint GET /meterevents/{meterguid}/{dtfrom}/{dtto}
     @Bean
     @RefreshScope
-    public Step meterEventsStep(@Qualifier("restTemplate") RestTemplate restTemplate, RabbitTemplate rabbitTemplate,
-        ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, @Qualifier("outCounter") Counter outCounter, @Qualifier("outGaugeCounter") DoubleAccumulator outGaugeCounter, @Qualifier("outGauge") Gauge outGauge) {
+    public Step meterEventsStep(@Qualifier("restTemplate") RestTemplate restTemplate, @Qualifier("rabbitTemplateEvents") RabbitTemplate rabbitTemplateEvents, @Qualifier("rabbitTemplateConsolidations") RabbitTemplate rabbitTemplateConsolidations, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, @Qualifier("outCounter") Counter outCounter, @Qualifier("outGaugeCounter") DoubleAccumulator outGaugeCounter, @Qualifier("outGauge") Gauge outGauge) {
         return stepBuilderFactory.get("stepMeterEvents")
                 .<List<EndDeviceEvent>, List<EndDeviceEvent>>chunk(chunkSize)
                 .reader(new MeterEventsReader(pyramidRestUrl, restTemplate, commandParametersMap, objectMapper))
-                .writer(new MeterEventsWriter(rabbitTemplate, objectMapper, outCounter, outGaugeCounter, outGauge))
+                .writer(new MeterEventsWriter(rabbitTemplateEvents, rabbitTemplateConsolidations, objectMapper, outCounter, outGaugeCounter, outGauge))
                 .build();
     }
 

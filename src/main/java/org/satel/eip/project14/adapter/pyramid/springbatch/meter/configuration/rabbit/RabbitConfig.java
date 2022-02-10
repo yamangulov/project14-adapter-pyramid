@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 @Slf4j
 @EnableRabbit
@@ -23,13 +24,39 @@ import org.springframework.context.annotation.Configuration;
 @RefreshScope
 public class RabbitConfig {
     @Value("${rabbitmq.MetersUuids.exchange}")
-    private String metersUuidsExchange;
+    private String defaultExchange;
 
     @Value("${rabbitmq.MetersUuids.routingKey}")
     private String metersUuidsRoutingKey;
-
     @Value("${rabbitmq.commands.queue}")
-    private String defaultQueue;
+    private String metersUuidsQueue;
+
+    @Value("${rabbitmq.BadCommand.exchange}")
+    private String badCommandExchange;
+    @Value("${rabbitmq.BadCommand.routingKey}")
+    private String badCommandRoutingKey;
+    @Value("${rabbitmq.BadCommand.queue}")
+    private String badCommandQueue;
+
+    @Value("${rabbitmq.Consolidations.queue}")
+    private String consolidationsQueue;
+    @Value("${rabbitmq.Consolidations.routingKey}")
+    private String consolidationsRoutingKey;
+
+    @Value("${rabbitmq.Events.queue}")
+    private String eventsQueue;
+    @Value("${rabbitmq.Events.routingKey}")
+    private String eventsRoutingKey;
+
+    @Value("${rabbitmq.SuccessCommand.routingKey}")
+    private String successCommandRoutingKey;
+    @Value("${rabbitmq.SuccessCommand.queue}")
+    private String successCommandQueue;
+
+    @Value("${rabbitmq.MeterReadings.queue}")
+    private String meterReadingsQueue;
+    @Value("${rabbitmq.MeterReadings.routingKey}")
+    private String meterReadingsRoutingKey;
 
     @Value("${spring.rabbitmq.host}")
     String host;
@@ -50,11 +77,11 @@ public class RabbitConfig {
     @RefreshScope
     public SimpleRabbitListenerContainerFactory simpleRabbitListenerContainerFactory() {
         SimpleRabbitListenerContainerFactory simpleRabbitListenerContainerFactory = new SimpleRabbitListenerContainerFactory();
-        simpleRabbitListenerContainerFactory.setConnectionFactory(connectionFactory());
+        simpleRabbitListenerContainerFactory.setConnectionFactory(listenerConnectionFactory());
         return simpleRabbitListenerContainerFactory;
     }
 
-    @Bean
+    @Bean("connectionFactory")
     @RefreshScope
     public ConnectionFactory connectionFactory() {
         CachingConnectionFactory connectionFactory = new CachingConnectionFactory(host, Integer.parseInt(port));
@@ -64,16 +91,78 @@ public class RabbitConfig {
         return connectionFactory;
     }
 
-    @Bean("rabbitTemplate")
+    @Bean("listenerConnectionFactory")
+    @Primary
     @RefreshScope
-    public RabbitTemplate rabbitTemplate() {
-        return new RabbitTemplate(connectionFactory());
+    public ConnectionFactory listenerConnectionFactory() {
+        CachingConnectionFactory connectionFactory = new CachingConnectionFactory(host, Integer.parseInt(port));
+        connectionFactory.setUsername(username);
+        connectionFactory.setPassword(password);
+        connectionFactory.setVirtualHost(virtualHost);
+        return connectionFactory;
     }
 
-    @Bean
+    @Bean("rabbitTemplate")
+    @Primary
     @RefreshScope
-    public AmqpAdmin amqpAdmin() {
-        RabbitAdmin rabbitAdmin = new RabbitAdmin(connectionFactory());
+    public RabbitTemplate rabbitTemplate() {
+        return new RabbitTemplate(listenerConnectionFactory());
+    }
+
+    @Bean("rabbitTemplateBadCommand")
+    @RefreshScope
+    public RabbitTemplate rabbitTemplateBadCommand() {
+        RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory());
+        rabbitTemplate.setDefaultReceiveQueue(badCommandQueue);
+        rabbitTemplate.setExchange(badCommandExchange);
+        rabbitTemplate.setRoutingKey(badCommandRoutingKey);
+        return rabbitTemplate;
+    }
+
+    @Bean("rabbitTemplateSuccessCommand")
+    @RefreshScope
+    public RabbitTemplate rabbitTemplateSuccessCommand() {
+        RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory());
+        rabbitTemplate.setDefaultReceiveQueue(successCommandQueue);
+        rabbitTemplate.setExchange(defaultExchange);
+        rabbitTemplate.setRoutingKey(successCommandRoutingKey);
+        return rabbitTemplate;
+    }
+
+    @Bean("rabbitTemplateConsolidations")
+    @RefreshScope
+    public RabbitTemplate rabbitTemplateConsolidations() {
+        RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory());
+        rabbitTemplate.setDefaultReceiveQueue(consolidationsQueue);
+        rabbitTemplate.setExchange(defaultExchange);
+        rabbitTemplate.setRoutingKey(consolidationsRoutingKey);
+        return rabbitTemplate;
+    }
+
+    @Bean("rabbitTemplateEvents")
+    @RefreshScope
+    public RabbitTemplate rabbitTemplateEvents() {
+        RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory());
+        rabbitTemplate.setDefaultReceiveQueue(eventsQueue);
+        rabbitTemplate.setExchange(defaultExchange);
+        rabbitTemplate.setRoutingKey(eventsRoutingKey);
+        return rabbitTemplate;
+    }
+
+    @Bean("rabbitTemplateMeterReadings")
+    @RefreshScope
+    public RabbitTemplate rabbitTemplateMeterReadings() {
+        RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory());
+        rabbitTemplate.setDefaultReceiveQueue(meterReadingsQueue);
+        rabbitTemplate.setExchange(defaultExchange);
+        rabbitTemplate.setRoutingKey(meterReadingsRoutingKey);
+        return rabbitTemplate;
+    }
+
+    @Bean("listenerAmqpAdmin")
+    @RefreshScope
+    public AmqpAdmin listenerAmqpAdmin() {
+        RabbitAdmin rabbitAdmin = new RabbitAdmin(listenerConnectionFactory());
         if (!inputCommandQueue().getName().equals("PYRAMID_METERS.COMMANDS")) {
             log.error("Очередь {} имеет некорректное имя, проверьте сервер RabbitMQ, при полном перезапуске " +
                     "адаптера Пирамиды будет создана паразитная очередь с таким именем, и ее нужно удалить " +
@@ -82,16 +171,22 @@ public class RabbitConfig {
         return rabbitAdmin;
     }
 
+    @Bean("amqpAdmin")
+    @RefreshScope
+    public AmqpAdmin amqpAdmin() {
+        return new RabbitAdmin(connectionFactory());
+    }
+
     @Bean
     @RefreshScope
     public DirectExchange commandExchange() {
-        return new DirectExchange(metersUuidsExchange);
+        return new DirectExchange(defaultExchange);
     }
 
     @Bean("inputCommandQueue")
     @RefreshScope
     public Queue inputCommandQueue() {
-        return new Queue(defaultQueue);
+        return new Queue(metersUuidsQueue);
     }
 
     @Bean

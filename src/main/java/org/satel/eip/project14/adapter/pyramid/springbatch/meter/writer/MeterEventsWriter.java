@@ -8,8 +8,6 @@ import org.satel.eip.project14.data.model.pyramid.EndDeviceEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.batch.core.StepExecution;
-import org.springframework.batch.core.annotation.BeforeStep;
 import org.springframework.batch.item.ItemWriter;
 
 import java.util.ArrayList;
@@ -19,34 +17,20 @@ import java.util.concurrent.atomic.DoubleAccumulator;
 public class MeterEventsWriter implements ItemWriter<List<EndDeviceEvent>> {
     private static final Logger LOGGER = LoggerFactory.getLogger(MeterEventsWriter.class);
 
-    private final RabbitTemplate rabbitTemplate;
-    private String exchange;
-    private String eventsRoutingKey;
-    private String eventsQueue;
-    private String defaultQueue;
+    private final RabbitTemplate rabbitTemplateEvents;
+    private final RabbitTemplate rabbitTemplateConsolidations;
     private final ObjectMapper objectMapper;
-    private String consolidationsQueue;
-    private String consolidationsRoutingKey;
     private final Counter outCounter;
     private DoubleAccumulator outGaugeCounter;
     private final Gauge outGauge;
 
-    public MeterEventsWriter(RabbitTemplate rabbitTemplate, ObjectMapper objectMapper, Counter outCounter, DoubleAccumulator outGaugeCounter, Gauge outGauge) {
-        this.rabbitTemplate = rabbitTemplate;
+    public MeterEventsWriter(RabbitTemplate rabbitTemplateEvents, RabbitTemplate rabbitTemplateConsolidations, ObjectMapper objectMapper, Counter outCounter, DoubleAccumulator outGaugeCounter, Gauge outGauge) {
+        this.rabbitTemplateEvents = rabbitTemplateEvents;
+        this.rabbitTemplateConsolidations = rabbitTemplateConsolidations;
         this.objectMapper = objectMapper;
         this.outCounter = outCounter;
         this.outGaugeCounter = outGaugeCounter;
         this.outGauge = outGauge;
-    }
-
-    @BeforeStep
-    private void initData(StepExecution stepExecution) {
-        this.exchange = stepExecution.getJobExecution().getJobParameters().getString("exchange");
-        this.eventsRoutingKey = stepExecution.getJobExecution().getJobParameters().getString("eventsRoutingKey");
-        this.eventsQueue = stepExecution.getJobExecution().getJobParameters().getString("eventsQueue");
-        this.defaultQueue = stepExecution.getJobExecution().getJobParameters().getString("defaultQueue");
-        this.consolidationsRoutingKey = stepExecution.getJobExecution().getJobParameters().getString("consolidationsRoutingKey");
-        this.consolidationsQueue = stepExecution.getJobExecution().getJobParameters().getString("consolidationsQueue");
     }
 
     @Override
@@ -55,7 +39,6 @@ public class MeterEventsWriter implements ItemWriter<List<EndDeviceEvent>> {
 
         List<EndDeviceEvent> readings = new ArrayList<>();
         items.forEach(readings::addAll);
-        rabbitTemplate.setDefaultReceiveQueue(eventsQueue);
         readings.forEach(reading -> {
             String readingString = null;
             try {
@@ -65,10 +48,10 @@ public class MeterEventsWriter implements ItemWriter<List<EndDeviceEvent>> {
                         reading, e.getMessage());
             }
             if (readingString != null) {
-                rabbitTemplate.convertAndSend(this.exchange, this.eventsRoutingKey, readingString);
+                rabbitTemplateEvents.convertAndSend(readingString);
             }
         });
-        rabbitTemplate.setDefaultReceiveQueue(consolidationsQueue);
+
         readings.forEach(reading -> {
             String readingString = null;
             try {
@@ -78,13 +61,12 @@ public class MeterEventsWriter implements ItemWriter<List<EndDeviceEvent>> {
                         reading, e.getMessage());
             }
             if (readingString != null) {
-                rabbitTemplate.convertAndSend(this.exchange, this.consolidationsRoutingKey, readingString);
+                rabbitTemplateConsolidations.convertAndSend(readingString);
                 outCounter.increment();
                 outGaugeCounter.accumulate(1.0);
                 outGauge.measure();
             }
         });
-        rabbitTemplate.setDefaultReceiveQueue(defaultQueue);
 
         LOGGER.info("End writing EndDeviceEvents on step2 into RabbitMQ");
     }

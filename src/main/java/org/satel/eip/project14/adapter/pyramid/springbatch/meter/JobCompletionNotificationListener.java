@@ -23,23 +23,15 @@ public class JobCompletionNotificationListener extends JobExecutionListenerSuppo
 
     static final Logger LOGGER = LoggerFactory.getLogger("elastic-logger");
 
-    private final RabbitTemplate rabbitTemplate;
-    private String exchange;
-    private String successCommandRoutingKey;
+    private final RabbitTemplate rabbitTemplateSuccessCommand;
     private String commandUuid;
-    private String successCommandQueue;
-    private String defaultQueue;
 
-    public JobCompletionNotificationListener(RabbitTemplate rabbitTemplate) {
-        this.rabbitTemplate = rabbitTemplate;
+    public JobCompletionNotificationListener(RabbitTemplate rabbitTemplateSuccessCommand) {
+        this.rabbitTemplateSuccessCommand = rabbitTemplateSuccessCommand;
     }
 
     @Override
     public void beforeJob(JobExecution jobExecution) {
-        this.exchange = jobExecution.getJobParameters().getString("exchange");
-        this.successCommandRoutingKey = jobExecution.getJobParameters().getString("successCommandRoutingKey");
-        this.successCommandQueue = jobExecution.getJobParameters().getString("successCommandQueue");
-        this.defaultQueue = jobExecution.getJobParameters().getString("defaultQueue");
         this.commandUuid = jobExecution.getJobParameters().getString("externalJobId");
     }
 
@@ -65,11 +57,9 @@ public class JobCompletionNotificationListener extends JobExecutionListenerSuppo
         MDC.put("operation", "Write command result");
         LOGGER.info(result);
 
-        rabbitTemplate.setDefaultReceiveQueue(successCommandQueue);
-        rabbitTemplate.convertAndSend(this.exchange, this.successCommandRoutingKey, result, m -> {
+        rabbitTemplateSuccessCommand.convertAndSend(result, m -> {
             m.getMessageProperties().setContentType(MessageProperties.CONTENT_TYPE_JSON);
             return m;
         });
-        rabbitTemplate.setDefaultReceiveQueue(defaultQueue);
     }
 }

@@ -38,7 +38,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 
 import javax.annotation.PostConstruct;
-import java.time.LocalDateTime;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.DoubleAccumulator;
 
@@ -49,11 +48,12 @@ import java.util.concurrent.atomic.DoubleAccumulator;
 public class RabbitMeterListener {
 
     @Value("${rabbitmq.MetersUuids.exchange}")
-    private String metersUuidsExchange;
+    private String defaultExchange;
+
     @Value("${rabbitmq.MetersUuids.routingKey}")
     private String metersUuidsRoutingKey;
     @Value("${rabbitmq.commands.queue}")
-    private String defaultQueue;
+    private String metersUuidsQueue;
 
     @Value("${rabbitmq.MeterReadings.queue}")
     private String meterReadingsQueue;
@@ -87,7 +87,7 @@ public class RabbitMeterListener {
     final JobLauncher jobLauncher;
     final Job getMeterJob;
 
-    private final RabbitTemplate rabbitTemplate;
+    private final RabbitTemplate rabbitTemplateBadCommand;
     private final ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap;
 
     private final ObjectMapper objectMapper;
@@ -108,11 +108,10 @@ public class RabbitMeterListener {
     }
 
     @Autowired
-    public RabbitMeterListener(JobLauncher jobLauncher, Job getMeterJob, @Qualifier("rabbitTemplate") RabbitTemplate rabbitTemplate,
-                               ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, MeterRegistry meterRegistry) {
+    public RabbitMeterListener(JobLauncher jobLauncher, Job getMeterJob, @Qualifier("rabbitTemplateBadCommand") RabbitTemplate rabbitTemplateBadCommand, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, MeterRegistry meterRegistry) {
         this.jobLauncher = jobLauncher;
         this.getMeterJob = getMeterJob;
-        this.rabbitTemplate = rabbitTemplate;
+        this.rabbitTemplateBadCommand = rabbitTemplateBadCommand;
         this.commandParametersMap = commandParametersMap;
         this.objectMapper = objectMapper;
         this.meterRegistry = meterRegistry;
@@ -178,6 +177,7 @@ public class RabbitMeterListener {
             } catch (Exception e) {
                 log.error("ERROR ON EXECUTING COMMAND IN BATCH JOB {}", commandType);
                 sendBadCommandResponse(commandType.getName(), "ERROR ON EXECUTING COMMAND IN BATCH JOB");
+                e.printStackTrace();
             }
         } else {
             log.error("NOT SUFFICIENT FOR PYRAMID COMMAND {} GOT FROM RABBITMQ", commandType);
@@ -191,14 +191,14 @@ public class RabbitMeterListener {
         try {
             listenPyramidCommands(in);
         } catch (JsonProcessingException e) {
-            log.error("Ошибка при конвертации в строку входящей команды из очереди {}", defaultQueue);
+            log.error("Ошибка при конвертации в строку входящей команды из очереди {}", metersUuidsQueue);
         }
     }
 
     @Bean
     @RefreshScope
-    public SimpleMessageListenerContainer simpleMessageListenerContainer(ConnectionFactory connectionFactory, Queue inputCommandQueue) {
-        SimpleMessageListenerContainer simpleMessageListenerContainer = new SimpleMessageListenerContainer(connectionFactory);
+    public SimpleMessageListenerContainer simpleMessageListenerContainer(@Qualifier("listenerConnectionFactory") ConnectionFactory listenerConnectionFactory, Queue inputCommandQueue) {
+        SimpleMessageListenerContainer simpleMessageListenerContainer = new SimpleMessageListenerContainer(listenerConnectionFactory);
         simpleMessageListenerContainer.addQueues(inputCommandQueue);
         simpleMessageListenerContainer.setMessageListener(this::pyramidCommandListener);
         simpleMessageListenerContainer.start();
@@ -212,19 +212,7 @@ public class RabbitMeterListener {
 
         String externalJobId = command.getUuid().toString();
         JobParameters jobParameters = new JobParametersBuilder()
-                .addString("dateNow", LocalDateTime.now().toString())
                 .addString("externalJobId", externalJobId)
-                .addString("exchange", this.metersUuidsExchange)
-                .addString("routingKey", this.metersUuidsRoutingKey)
-                .addString("readingsRoutingKey", this.meterReadingsRoutingKey)
-                .addString("meterReadingsQueue", this.meterReadingsQueue)
-                .addString("consolidationsRoutingKey", this.consolidationsRoutingKey)
-                .addString("consolidationsQueue", this.consolidationsQueue)
-                .addString("eventsRoutingKey", this.eventsRoutingKey)
-                .addString("eventsQueue", this.eventsQueue)
-                .addString("defaultQueue", defaultQueue)
-                .addString("successCommandRoutingKey", this.successCommandRoutingKey)
-                .addString("successCommandQueue", this.successCommandQueue)
                 .toJobParameters();
 
         commandParametersMap.put(externalJobId, new GetMeterRequestContainer(command));
@@ -241,12 +229,10 @@ public class RabbitMeterListener {
         MDC.put("operation", "Write command result");
         log.info(result);
 
-        rabbitTemplate.setDefaultReceiveQueue(badCommandQueue);
-        rabbitTemplate.convertAndSend(this.badCommandExchange, this.badCommandRoutingKey, result, m -> {
+        rabbitTemplateBadCommand.convertAndSend(result, m -> {
             m.getMessageProperties().setContentType(MessageProperties.CONTENT_TYPE_JSON);
             return m;
         });
-        rabbitTemplate.setDefaultReceiveQueue(defaultQueue);
     }
 
     @Scheduled(fixedDelayString = "60000")
