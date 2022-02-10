@@ -42,48 +42,17 @@ import java.time.LocalDateTime;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.DoubleAccumulator;
 
+import static org.satel.eip.project14.adapter.pyramid.springbatch.meter.configuration.rabbit.RabbitConstant.*;
+
 @Slf4j
 @Configuration
 @EnableScheduling
 @RefreshScope
 public class RabbitMeterListener {
 
-    @Value("${rabbitmq.MetersUuids.exchange}")
-    private String defaultExchange;
 
-    @Value("${rabbitmq.MetersUuids.routingKey}")
-    private String metersUuidsRoutingKey;
-    @Value("${rabbitmq.commands.queue}")
+    @Value(METERS_UUIDS_QUEUE)
     private String metersUuidsQueue;
-
-    @Value("${rabbitmq.MeterReadings.queue}")
-    private String meterReadingsQueue;
-    @Value("${rabbitmq.MeterReadings.routingKey}")
-    private String meterReadingsRoutingKey;
-
-    @Value("${rabbitmq.Consolidations.queue}")
-    private String consolidationsQueue;
-    @Value("${rabbitmq.Consolidations.routingKey}")
-    private String consolidationsRoutingKey;
-
-    @Value("${rabbitmq.Events.queue}")
-    private String eventsQueue;
-    @Value("${rabbitmq.Events.routingKey}")
-    private String eventsRoutingKey;
-
-    @Value("${rabbitmq.BadCommand.exchange}")
-    private String badCommandExchange;
-    @Value("${rabbitmq.BadCommand.routingKey}")
-    private String badCommandRoutingKey;
-    @Value("${rabbitmq.BadCommand.queue}")
-    private String badCommandQueue;
-
-    @Value("${rabbitmq.SuccessCommand.exchange}")
-    private String successCommandExchange;
-    @Value("${rabbitmq.SuccessCommand.routingKey}")
-    private String successCommandRoutingKey;
-    @Value("${rabbitmq.SuccessCommand.queue}")
-    private String successCommandQueue;
 
     final JobLauncher jobLauncher;
     final Job getMeterJob;
@@ -198,7 +167,7 @@ public class RabbitMeterListener {
 
     @Bean
     @RefreshScope
-    public SimpleMessageListenerContainer simpleMessageListenerContainer(@Qualifier("connectionFactory") ConnectionFactory connectionFactory) {
+    public SimpleMessageListenerContainer simpleMessageListenerContainer(ConnectionFactory connectionFactory) {
         SimpleMessageListenerContainer simpleMessageListenerContainer = new SimpleMessageListenerContainer(connectionFactory);
         simpleMessageListenerContainer.addQueues(new Queue(metersUuidsQueue));
         simpleMessageListenerContainer.setMessageListener(this::pyramidCommandListener);

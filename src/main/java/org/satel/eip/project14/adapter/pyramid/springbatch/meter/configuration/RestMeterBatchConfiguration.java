@@ -35,15 +35,17 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.DoubleAccumulator;
 
+import static org.satel.eip.project14.adapter.pyramid.springbatch.meter.configuration.rabbit.RabbitConstant.*;
+
 @Configuration
 @EnableBatchProcessing
 @EnableScheduling
 @RefreshScope
 public class RestMeterBatchConfiguration {
-    @Value("${pyramid.rest.url}")
+    @Value(PYRAMID_REST_URI)
     private String pyramidRestUrl;
 
-    @Value("${commands.GetMeter.limit:20}")
+    @Value(CHUNK_SIZE)
     private int chunkSize;
 
     final JobBuilderFactory jobBuilderFactory;

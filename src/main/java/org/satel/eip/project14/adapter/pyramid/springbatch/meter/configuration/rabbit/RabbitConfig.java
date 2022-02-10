@@ -12,59 +12,61 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
+import static org.satel.eip.project14.adapter.pyramid.springbatch.meter.configuration.rabbit.RabbitConstant.*;
+
 @Slf4j
 @EnableRabbit
 @Configuration
 @RefreshScope
 public class RabbitConfig {
-    @Value("${rabbitmq.MetersUuids.exchange}")
+    @Value(DEFAULT_EXCHANGE)
     private String defaultExchange;
 
-    @Value("${rabbitmq.MetersUuids.routingKey}")
+    @Value(METERS_UUIDS_ROUTING_KEY)
     private String metersUuidsRoutingKey;
-    @Value("${rabbitmq.commands.queue}")
+    @Value(METERS_UUIDS_QUEUE)
     private String metersUuidsQueue;
 
-    @Value("${rabbitmq.BadCommand.exchange}")
+    @Value(BAD_COMMAND_EXCHANGE)
     private String badCommandExchange;
-    @Value("${rabbitmq.BadCommand.routingKey}")
+    @Value(BAD_COMMAND_ROUTING_KEY)
     private String badCommandRoutingKey;
-    @Value("${rabbitmq.BadCommand.queue}")
+    @Value(BAD_COMMAND_QUEUE)
     private String badCommandQueue;
 
-    @Value("${rabbitmq.Consolidations.queue}")
+    @Value(CONSOLIDATIONS_QUEUE)
     private String consolidationsQueue;
-    @Value("${rabbitmq.Consolidations.routingKey}")
+    @Value(CONSOLIDATIONS_ROUTING_KEY)
     private String consolidationsRoutingKey;
 
-    @Value("${rabbitmq.Events.queue}")
+    @Value(EVENTS_QUEUE)
     private String eventsQueue;
-    @Value("${rabbitmq.Events.routingKey}")
+    @Value(EVENTS_ROUTING_KEY)
     private String eventsRoutingKey;
 
-    @Value("${rabbitmq.SuccessCommand.routingKey}")
+    @Value(SUCCESS_COMMAND_ROUTING_KEY)
     private String successCommandRoutingKey;
-    @Value("${rabbitmq.SuccessCommand.queue}")
+    @Value(SUCCESS_COMMAND_QUEUE)
     private String successCommandQueue;
 
-    @Value("${rabbitmq.MeterReadings.queue}")
+    @Value(METER_READINGS_QUEUE)
     private String meterReadingsQueue;
-    @Value("${rabbitmq.MeterReadings.routingKey}")
+    @Value(METER_READINGS_ROUTING_KEY)
     private String meterReadingsRoutingKey;
 
-    @Value("${spring.rabbitmq.host}")
+    @Value(RABBITMQ_HOST)
     String host;
 
-    @Value("${spring.rabbitmq.port}")
+    @Value(RABBITMQ_PORT)
     String port;
 
-    @Value("${spring.rabbitmq.username}")
+    @Value(RABBITMQ_USER_NAME)
     String username;
 
-    @Value("${spring.rabbitmq.password}")
+    @Value(RABBITMQ_PASSWORD)
     String password;
 
-    @Value("${spring.rabbitmq.virtual-host}")
+    @Value(RABBITMQ_VIRTUAL_HOST)
     String virtualHost;
 
     @Bean
@@ -75,7 +77,7 @@ public class RabbitConfig {
         return simpleRabbitListenerContainerFactory;
     }
 
-    @Bean("connectionFactory")
+    @Bean
     @RefreshScope
     public ConnectionFactory connectionFactory() {
         CachingConnectionFactory connectionFactory = new CachingConnectionFactory(host, Integer.parseInt(port));
@@ -85,18 +87,7 @@ public class RabbitConfig {
         return connectionFactory;
     }
 
-//    @Bean("listenerConnectionFactory")
-//    @Primary
-//    @RefreshScope
-//    public ConnectionFactory listenerConnectionFactory() {
-//        CachingConnectionFactory connectionFactory = new CachingConnectionFactory(host, Integer.parseInt(port));
-//        connectionFactory.setUsername(username);
-//        connectionFactory.setPassword(password);
-//        connectionFactory.setVirtualHost(virtualHost);
-//        return connectionFactory;
-//    }
-
-    @Bean("rabbitTemplate")
+    @Bean(LISTENER_RABBIT_TEMPLATE)
     @Primary
     @RefreshScope
     public RabbitTemplate rabbitTemplate() {
@@ -107,7 +98,7 @@ public class RabbitConfig {
         return rabbitTemplate;
     }
 
-    @Bean("rabbitTemplateBadCommand")
+    @Bean(BAD_COMMAND_RABBIT_TEMPLATE)
     @RefreshScope
     public RabbitTemplate rabbitTemplateBadCommand() {
         RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory());
@@ -117,7 +108,7 @@ public class RabbitConfig {
         return rabbitTemplate;
     }
 
-    @Bean("rabbitTemplateSuccessCommand")
+    @Bean(SUCCESS_COMMAND_RABBIT_TEMPLATE)
     @RefreshScope
     public RabbitTemplate rabbitTemplateSuccessCommand() {
         RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory());
@@ -127,7 +118,7 @@ public class RabbitConfig {
         return rabbitTemplate;
     }
 
-    @Bean("rabbitTemplateConsolidations")
+    @Bean(CONSOLIDATIONS_RABBIT_TEMPLATE)
     @RefreshScope
     public RabbitTemplate rabbitTemplateConsolidations() {
         RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory());
@@ -137,7 +128,7 @@ public class RabbitConfig {
         return rabbitTemplate;
     }
 
-    @Bean("rabbitTemplateEvents")
+    @Bean(EVENTS_RABBIT_TEMPLATE)
     @RefreshScope
     public RabbitTemplate rabbitTemplateEvents() {
         RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory());
@@ -147,7 +138,7 @@ public class RabbitConfig {
         return rabbitTemplate;
     }
 
-    @Bean("rabbitTemplateMeterReadings")
+    @Bean(METER_READINGS_RABBIT_TEMPLATE)
     @RefreshScope
     public RabbitTemplate rabbitTemplateMeterReadings() {
         RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory());
@@ -156,41 +147,5 @@ public class RabbitConfig {
         rabbitTemplate.setRoutingKey(meterReadingsRoutingKey);
         return rabbitTemplate;
     }
-
-//    @Bean("listenerAmqpAdmin")
-//    @RefreshScope
-//    public AmqpAdmin listenerAmqpAdmin() {
-//        RabbitAdmin rabbitAdmin = new RabbitAdmin(connectionFactory());
-//        if (!metersUuidsQueue.equals("PYRAMID_METERS.COMMANDS")) {
-//            log.error("Очередь {} имеет некорректное имя, проверьте сервер RabbitMQ, при полном перезапуске " +
-//                    "адаптера Пирамиды будет создана паразитная очередь с таким именем, и ее нужно удалить " +
-//                    "и создать очередь с правильным именем", metersUuidsQueue);
-//        }
-//        return rabbitAdmin;
-//    }
-//
-//    @Bean("amqpAdmin")
-//    @RefreshScope
-//    public AmqpAdmin amqpAdmin() {
-//        return new RabbitAdmin(connectionFactory());
-//    }
-
-//    @Bean
-//    @RefreshScope
-//    public DirectExchange commandExchange() {
-//        return new DirectExchange(defaultExchange);
-//    }
-//
-//    @Bean("inputCommandQueue")
-//    @RefreshScope
-//    public Queue inputCommandQueue() {
-//        return new Queue(metersUuidsQueue);
-//    }
-
-//    @Bean
-//    @RefreshScope
-//    public Binding commandBinding() {
-//        return BindingBuilder.bind(inputCommandQueue()).to(commandExchange()).with(metersUuidsRoutingKey);
-//    }
 
 }
