@@ -1,16 +1,10 @@
 package org.satel.eip.project14.adapter.pyramid.springbatch.meter.configuration.rabbit;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.core.AmqpAdmin;
-import org.springframework.amqp.core.Binding;
-import org.springframework.amqp.core.BindingBuilder;
-import org.springframework.amqp.core.DirectExchange;
-import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.annotation.EnableRabbit;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
-import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
@@ -77,7 +71,7 @@ public class RabbitConfig {
     @RefreshScope
     public SimpleRabbitListenerContainerFactory simpleRabbitListenerContainerFactory() {
         SimpleRabbitListenerContainerFactory simpleRabbitListenerContainerFactory = new SimpleRabbitListenerContainerFactory();
-        simpleRabbitListenerContainerFactory.setConnectionFactory(listenerConnectionFactory());
+        simpleRabbitListenerContainerFactory.setConnectionFactory(connectionFactory());
         return simpleRabbitListenerContainerFactory;
     }
 
@@ -91,22 +85,26 @@ public class RabbitConfig {
         return connectionFactory;
     }
 
-    @Bean("listenerConnectionFactory")
-    @Primary
-    @RefreshScope
-    public ConnectionFactory listenerConnectionFactory() {
-        CachingConnectionFactory connectionFactory = new CachingConnectionFactory(host, Integer.parseInt(port));
-        connectionFactory.setUsername(username);
-        connectionFactory.setPassword(password);
-        connectionFactory.setVirtualHost(virtualHost);
-        return connectionFactory;
-    }
+//    @Bean("listenerConnectionFactory")
+//    @Primary
+//    @RefreshScope
+//    public ConnectionFactory listenerConnectionFactory() {
+//        CachingConnectionFactory connectionFactory = new CachingConnectionFactory(host, Integer.parseInt(port));
+//        connectionFactory.setUsername(username);
+//        connectionFactory.setPassword(password);
+//        connectionFactory.setVirtualHost(virtualHost);
+//        return connectionFactory;
+//    }
 
     @Bean("rabbitTemplate")
     @Primary
     @RefreshScope
     public RabbitTemplate rabbitTemplate() {
-        return new RabbitTemplate(listenerConnectionFactory());
+        RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory());
+        rabbitTemplate.setDefaultReceiveQueue(metersUuidsQueue);
+        rabbitTemplate.setExchange(defaultExchange);
+        rabbitTemplate.setRoutingKey(metersUuidsRoutingKey);
+        return rabbitTemplate;
     }
 
     @Bean("rabbitTemplateBadCommand")
@@ -159,40 +157,40 @@ public class RabbitConfig {
         return rabbitTemplate;
     }
 
-    @Bean("listenerAmqpAdmin")
-    @RefreshScope
-    public AmqpAdmin listenerAmqpAdmin() {
-        RabbitAdmin rabbitAdmin = new RabbitAdmin(listenerConnectionFactory());
-        if (!inputCommandQueue().getName().equals("PYRAMID_METERS.COMMANDS")) {
-            log.error("Очередь {} имеет некорректное имя, проверьте сервер RabbitMQ, при полном перезапуске " +
-                    "адаптера Пирамиды будет создана паразитная очередь с таким именем, и ее нужно удалить " +
-                    "и создать очередь с правильным именем", inputCommandQueue());
-        }
-        return rabbitAdmin;
-    }
+//    @Bean("listenerAmqpAdmin")
+//    @RefreshScope
+//    public AmqpAdmin listenerAmqpAdmin() {
+//        RabbitAdmin rabbitAdmin = new RabbitAdmin(connectionFactory());
+//        if (!metersUuidsQueue.equals("PYRAMID_METERS.COMMANDS")) {
+//            log.error("Очередь {} имеет некорректное имя, проверьте сервер RabbitMQ, при полном перезапуске " +
+//                    "адаптера Пирамиды будет создана паразитная очередь с таким именем, и ее нужно удалить " +
+//                    "и создать очередь с правильным именем", metersUuidsQueue);
+//        }
+//        return rabbitAdmin;
+//    }
+//
+//    @Bean("amqpAdmin")
+//    @RefreshScope
+//    public AmqpAdmin amqpAdmin() {
+//        return new RabbitAdmin(connectionFactory());
+//    }
 
-    @Bean("amqpAdmin")
-    @RefreshScope
-    public AmqpAdmin amqpAdmin() {
-        return new RabbitAdmin(connectionFactory());
-    }
+//    @Bean
+//    @RefreshScope
+//    public DirectExchange commandExchange() {
+//        return new DirectExchange(defaultExchange);
+//    }
+//
+//    @Bean("inputCommandQueue")
+//    @RefreshScope
+//    public Queue inputCommandQueue() {
+//        return new Queue(metersUuidsQueue);
+//    }
 
-    @Bean
-    @RefreshScope
-    public DirectExchange commandExchange() {
-        return new DirectExchange(defaultExchange);
-    }
-
-    @Bean("inputCommandQueue")
-    @RefreshScope
-    public Queue inputCommandQueue() {
-        return new Queue(metersUuidsQueue);
-    }
-
-    @Bean
-    @RefreshScope
-    public Binding commandBinding() {
-        return BindingBuilder.bind(inputCommandQueue()).to(commandExchange()).with(metersUuidsRoutingKey);
-    }
+//    @Bean
+//    @RefreshScope
+//    public Binding commandBinding() {
+//        return BindingBuilder.bind(inputCommandQueue()).to(commandExchange()).with(metersUuidsRoutingKey);
+//    }
 
 }

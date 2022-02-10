@@ -38,6 +38,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 
 import javax.annotation.PostConstruct;
+import java.time.LocalDateTime;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.DoubleAccumulator;
 
@@ -197,9 +198,9 @@ public class RabbitMeterListener {
 
     @Bean
     @RefreshScope
-    public SimpleMessageListenerContainer simpleMessageListenerContainer(@Qualifier("listenerConnectionFactory") ConnectionFactory listenerConnectionFactory, Queue inputCommandQueue) {
-        SimpleMessageListenerContainer simpleMessageListenerContainer = new SimpleMessageListenerContainer(listenerConnectionFactory);
-        simpleMessageListenerContainer.addQueues(inputCommandQueue);
+    public SimpleMessageListenerContainer simpleMessageListenerContainer(@Qualifier("connectionFactory") ConnectionFactory connectionFactory) {
+        SimpleMessageListenerContainer simpleMessageListenerContainer = new SimpleMessageListenerContainer(connectionFactory);
+        simpleMessageListenerContainer.addQueues(new Queue(metersUuidsQueue));
         simpleMessageListenerContainer.setMessageListener(this::pyramidCommandListener);
         simpleMessageListenerContainer.start();
         return simpleMessageListenerContainer;
@@ -212,6 +213,7 @@ public class RabbitMeterListener {
 
         String externalJobId = command.getUuid().toString();
         JobParameters jobParameters = new JobParametersBuilder()
+                .addString("dateNow", LocalDateTime.now().toString())
                 .addString("externalJobId", externalJobId)
                 .toJobParameters();
 
