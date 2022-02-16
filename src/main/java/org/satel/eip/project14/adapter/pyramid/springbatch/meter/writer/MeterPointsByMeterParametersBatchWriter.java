@@ -2,40 +2,34 @@ package org.satel.eip.project14.adapter.pyramid.springbatch.meter.writer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.Gauge;
+import lombok.extern.slf4j.Slf4j;
+import org.satel.eip.project14.adapter.pyramid.metrics.accumulator.AccumulatorService;
+import org.satel.eip.project14.adapter.pyramid.metrics.accumulator.entity.AvailableMetrics;
 import org.satel.eip.project14.data.model.pyramid.Reading;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.batch.item.ItemWriter;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.DoubleAccumulator;
 
+@Slf4j
 public class MeterPointsByMeterParametersBatchWriter implements ItemWriter<List<Reading>> {
-    private static final Logger LOGGER = LoggerFactory.getLogger(MeterPointsByMeterParametersBatchWriter.class);
 
     private final RabbitTemplate rabbitTemplateMeterReadings;
     private final RabbitTemplate rabbitTemplateConsolidations;
     private final ObjectMapper objectMapper;
-    private final Counter outCounter;
-    private final DoubleAccumulator outGaugeCounter;
-    private final Gauge outGauge;
+    private final AccumulatorService accumulatorService;
 
-    public MeterPointsByMeterParametersBatchWriter(RabbitTemplate rabbitTemplateMeterReadings, RabbitTemplate rabbitTemplateConsolidations, ObjectMapper objectMapper, Counter outCounter, DoubleAccumulator outGaugeCounter, Gauge outGauge) {
+    public MeterPointsByMeterParametersBatchWriter(RabbitTemplate rabbitTemplateMeterReadings, RabbitTemplate rabbitTemplateConsolidations, ObjectMapper objectMapper, AccumulatorService accumulatorService) {
         this.rabbitTemplateMeterReadings = rabbitTemplateMeterReadings;
         this.rabbitTemplateConsolidations = rabbitTemplateConsolidations;
         this.objectMapper = objectMapper;
-        this.outCounter = outCounter;
-        this.outGaugeCounter = outGaugeCounter;
-        this.outGauge = outGauge;
+        this.accumulatorService = accumulatorService;
     }
 
     @Override
     public void write(List<? extends List<Reading>> items) throws Exception {
-        LOGGER.info("Writing Reading on step1 into RabbitMQ");
+        log.info("Writing Reading on step1 into RabbitMQ");
 
         List<Reading> readings = new ArrayList<>();
         items.forEach(readings::addAll);
@@ -44,29 +38,17 @@ public class MeterPointsByMeterParametersBatchWriter implements ItemWriter<List<
             try {
                 readingString = objectMapper.writeValueAsString(reading);
             } catch (JsonProcessingException e) {
-                LOGGER.info("Error in MeterPointsByMeterParametersBatchWriter on mapping reading {} into String:\n{}",
+                log.info("Error in MeterPointsByMeterParametersBatchWriter on mapping reading {} into String:\n{}",
                         reading, e.getMessage());
+                accumulatorService.increment(accumulatorService.getChannel("batchJob"), AvailableMetrics.BATCH_JOB_METER_POINTS_MAPPING_ERROR);
             }
             if (readingString != null) {
                 rabbitTemplateMeterReadings.convertAndSend(readingString);
-            }
-        });
-        readings.forEach(reading -> {
-            String readingString = null;
-            try {
-                readingString = objectMapper.writeValueAsString(reading);
-            } catch (JsonProcessingException e) {
-                LOGGER.info("Error in MeterPointsByMeterParametersBatchWriter on mapping reading {} into String:\n{}",
-                        reading, e.getMessage());
-            }
-            if (readingString != null) {
                 rabbitTemplateConsolidations.convertAndSend(readingString);
-                outCounter.increment();
-                outGaugeCounter.accumulate(1.0);
-                outGauge.measure();
+                accumulatorService.increment(accumulatorService.getChannel("batchJob"), AvailableMetrics.BATCH_JOB_METER_POINTS_RETURNED_TOTAL);
             }
         });
 
-        LOGGER.info("End writing Reading on step1 into RabbitMQ");
+        log.info("End writing Reading on step1 into RabbitMQ");
     }
 }

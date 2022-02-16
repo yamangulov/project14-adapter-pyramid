@@ -4,15 +4,14 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.Gauge;
-import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.satel.eip.project14.adapter.pyramid.domain.command.CommandType;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandParametersContainer;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.GetMeterRequestContainer;
 import org.satel.eip.project14.adapter.pyramid.domain.command.entity.GetMeterRequestCommand;
 import org.satel.eip.project14.adapter.pyramid.domain.command.response.CommandResponse;
+import org.satel.eip.project14.adapter.pyramid.metrics.accumulator.AccumulatorService;
+import org.satel.eip.project14.adapter.pyramid.metrics.accumulator.entity.AvailableMetrics;
 import org.slf4j.MDC;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
@@ -35,14 +34,11 @@ import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
-import org.springframework.scheduling.annotation.Scheduled;
 
-import javax.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.DoubleAccumulator;
 
-import static org.satel.eip.project14.adapter.pyramid.springbatch.meter.configuration.rabbit.RabbitConstant.*;
+import static org.satel.eip.project14.adapter.pyramid.springbatch.meter.configuration.rabbit.RabbitConstant.METERS_UUIDS_QUEUE;
 
 @Slf4j
 @Configuration
@@ -59,68 +55,27 @@ public class RabbitMeterListener {
 
     private final RabbitTemplate rabbitTemplateBadCommand;
     private final ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap;
-
     private final ObjectMapper objectMapper;
-
-    private final MeterRegistry meterRegistry;
-    private Counter inCounter;
-    private Gauge inGauge;
-
-    @PostConstruct
-    public void init() {
-        inCounter =
-                Counter.builder("income_rabbitmq_package")
-                        .description("Income package got from RabbitMQ")
-                        .register(meterRegistry);
-        inGauge = Gauge.builder("income_rabbitmq_package_resetable", this::getInGaugeCounter)
-                .description("Gauge for income message got from RabbitMQ")
-                .register(meterRegistry);
-    }
+    private final AccumulatorService accumulatorService;
 
     @Autowired
-    public RabbitMeterListener(JobLauncher jobLauncher, Job getMeterJob, @Qualifier("rabbitTemplateBadCommand") RabbitTemplate rabbitTemplateBadCommand, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, MeterRegistry meterRegistry) {
+    public RabbitMeterListener(JobLauncher jobLauncher, Job getMeterJob, @Qualifier("rabbitTemplateBadCommand") RabbitTemplate rabbitTemplateBadCommand, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, AccumulatorService accumulatorService) {
         this.jobLauncher = jobLauncher;
         this.getMeterJob = getMeterJob;
         this.rabbitTemplateBadCommand = rabbitTemplateBadCommand;
         this.commandParametersMap = commandParametersMap;
         this.objectMapper = objectMapper;
-        this.meterRegistry = meterRegistry;
+        this.accumulatorService = accumulatorService;
     }
 
-    @Bean("inGaugeCounter")
-    DoubleAccumulator inGaugeCounter() {
-        return new DoubleAccumulator(Double::sum, 0);
-    }
-
-    Double getInGaugeCounter() {
-        return inGaugeCounter().get();
-    }
-    
-    @Bean("inCounter")
-    Counter inCounter() {
-        return this.inCounter;
-    }
-
-    // Этот функционал реализован ниже в бине SimpleMessageListenerContainer
-    //    @RabbitListener(id = "pyramidCommandListener", bindings = @QueueBinding(
-    //            value = @Queue(value = "${rabbitmq.commands.queue}"),
-    //            exchange = @Exchange(value = "${rabbitmq.MetersUuids.exchange}"),
-    //            key = "${rabbitmq.MetersUuids.routingKey}"
-    //    ))
-    public void listenPyramidCommands(String in) throws JsonProcessingException {
-
-        inCounter.increment();
-        inGaugeCounter().accumulate(1.0);
-        inGauge.measure();
-
-        log.info("inCounter: {}", inCounter.count());
-
+    public void pyramidCommandProcessor(String in) throws JsonProcessingException {
         JsonNode rootNode;
         try {
             rootNode = objectMapper.readTree(in);
         } catch (Exception e) {
             log.error("BAD ON READING COMMAND: {}", e.getMessage());
             sendBadCommandResponse(null, "BAD ON READING COMMAND FROM RABBIT");
+            accumulatorService.increment(accumulatorService.getChannel("commandListener"), AvailableMetrics.COMMAND_LISTENER_COMMAND_READING_ERROR);
             return;
         }
 
@@ -128,6 +83,7 @@ public class RabbitMeterListener {
         if (commandUuid == null || commandUuid.isEmpty()) {
             log.error("EMPTY COMMAND UUID");
             sendBadCommandResponse(commandUuid, "EMPTY COMMAND UUID");
+            accumulatorService.increment(accumulatorService.getChannel("commandListener"), AvailableMetrics.COMMAND_LISTENER_EMPTY_COMMAND_UUID_ERROR);
             return;
         }
         MDC.put("commandUuid", commandUuid);
@@ -136,8 +92,9 @@ public class RabbitMeterListener {
         CommandType commandType = CommandType.getCommandTypeByString(rootNode.get("commandType").asText());
 
         if (commandType == null) {
-            log.error("UNKNOWN COMMAND {} GOT FROM RABBITMQ", commandType);
-            sendBadCommandResponse(rootNode.get("commandType").asText(), "UNKNOWN COMMAND");
+            log.error("UNDEFINED COMMAND {} GOT FROM RABBITMQ", commandType);
+            sendBadCommandResponse(rootNode.get("commandType").asText(), "UNDEFINED COMMAND");
+            accumulatorService.increment(accumulatorService.getChannel("commandListener"), AvailableMetrics.COMMAND_LISTENER_UNDEFINED_COMMAND_TYPE_ERROR);
             return;
         }
 
@@ -147,21 +104,25 @@ public class RabbitMeterListener {
             } catch (Exception e) {
                 log.error("ERROR ON EXECUTING COMMAND IN BATCH JOB {}", commandType);
                 sendBadCommandResponse(commandType.getName(), "ERROR ON EXECUTING COMMAND IN BATCH JOB");
+                accumulatorService.increment(accumulatorService.getChannel("batchJob"), AvailableMetrics.BATCH_JOB_EXECUTING_ERROR_TOTAL);
                 e.printStackTrace();
             }
         } else {
             log.error("NOT SUFFICIENT FOR PYRAMID COMMAND {} GOT FROM RABBITMQ", commandType);
             sendBadCommandResponse(rootNode.get("commandType").asText(), "NOT SUFFICIENT FOR PYRAMID COMMAND");
+            accumulatorService.increment(accumulatorService.getChannel("commandListener"), AvailableMetrics.COMMAND_LISTENER_NOT_SUFFICIENT_COMMAND_TYPE_ERROR);
         }
 
     }
 
     public void pyramidCommandListener(Message message) {
         String in = new String(message.getBody());
+        accumulatorService.increment(accumulatorService.getChannel("commandListener"), AvailableMetrics.COMMAND_LISTENER_INCOME_COMMANDS_TOTAL);
         try {
-            listenPyramidCommands(in);
+            pyramidCommandProcessor(in);
         } catch (JsonProcessingException e) {
             log.error("Ошибка при конвертации в строку входящей команды из очереди {}", metersUuidsQueue);
+            accumulatorService.increment(accumulatorService.getChannel("commandListener"), AvailableMetrics.COMMAND_LISTENER_JSON_PROCESSING_ERROR);
         }
     }
 
@@ -204,12 +165,6 @@ public class RabbitMeterListener {
             m.getMessageProperties().setContentType(MessageProperties.CONTENT_TYPE_JSON);
             return m;
         });
-    }
-
-    @Scheduled(fixedDelayString = "60000")
-    private void clearGaugeCounter() {
-        inGaugeCounter().reset();
-        inGauge.measure();
     }
 
 }

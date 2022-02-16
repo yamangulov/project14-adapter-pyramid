@@ -2,14 +2,15 @@ package org.satel.eip.project14.adapter.pyramid.springbatch.meter.reader;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.CommandParametersContainer;
 import org.satel.eip.project14.adapter.pyramid.domain.command.container.GetMeterRequest;
 import org.satel.eip.project14.adapter.pyramid.domain.command.entity.GetMeterRequestCommand;
 import org.satel.eip.project14.adapter.pyramid.domain.command.entity.RestRequestType;
+import org.satel.eip.project14.adapter.pyramid.metrics.accumulator.AccumulatorService;
+import org.satel.eip.project14.adapter.pyramid.metrics.accumulator.entity.AvailableMetrics;
 import org.satel.eip.project14.data.model.pyramid.MeterParameter;
 import org.satel.eip.project14.data.model.pyramid.Reading;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.batch.core.StepExecution;
 import org.springframework.batch.core.annotation.BeforeStep;
 import org.springframework.batch.item.ItemReader;
@@ -30,8 +31,8 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+@Slf4j
 public class MeterPointsByMeterParametersBatchReader implements ItemReader<List<Reading>> {
-    private static final Logger LOGGER = LoggerFactory.getLogger(MeterPointsByMeterParametersBatchReader.class);
 
     private final String pyramidRestUrl;
     private final RestTemplate restTemplate;
@@ -42,12 +43,14 @@ public class MeterPointsByMeterParametersBatchReader implements ItemReader<List<
     private boolean done;
     private final ObjectMapper objectMapper;
     private String externalJobId;
+    private final AccumulatorService accumulatorService;
 
-    public MeterPointsByMeterParametersBatchReader(String pyramidRestUrl, RestTemplate restTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper) {
+    public MeterPointsByMeterParametersBatchReader(String pyramidRestUrl, RestTemplate restTemplate, ConcurrentHashMap<String, CommandParametersContainer<?>> commandParametersMap, ObjectMapper objectMapper, AccumulatorService accumulatorService) {
         this.pyramidRestUrl = pyramidRestUrl;
         this.restTemplate = restTemplate;
         this.commandParametersMap = commandParametersMap;
         this.objectMapper = objectMapper;
+        this.accumulatorService = accumulatorService;
     }
 
     @BeforeStep
@@ -65,7 +68,7 @@ public class MeterPointsByMeterParametersBatchReader implements ItemReader<List<
     @Override
     public List<Reading> read() throws UnexpectedInputException, ParseException, NonTransientResourceException {
         if (!this.done) {
-            LOGGER.info("Reading the information of meterpointsbymeterparametersbatch from " + this.pyramidRestUrl);
+            log.info("Reading the information of meterpointsbymeterparametersbatch from " + this.pyramidRestUrl);
 
             Map<String, String> requestsByParameters = new ConcurrentHashMap<>();
             Arrays.stream((MeterParameter.values())).forEach(meterParameter -> {
@@ -92,6 +95,7 @@ public class MeterPointsByMeterParametersBatchReader implements ItemReader<List<
             // String responseBody = restTemplate.exchange(endpoint, HttpMethod.GET, new HttpEntity<>(requestBody), String.class).getBody();
             requestsByParameters.forEach((meterParameterGuid, reqString) -> {
                 String resultInner = restTemplate.exchange(reqString, HttpMethod.GET, entity, String.class).getBody();
+                accumulatorService.increment(accumulatorService.getChannel("batchJob"), AvailableMetrics.BATCH_JOB_METER_POINTS_BATCH_REQUESTS_TOTAL);
                 try {
                     List<Reading> resultList = Arrays.asList(objectMapper.readValue(resultInner, Reading[].class));
                     resultList.forEach(reading -> {
@@ -100,16 +104,18 @@ public class MeterPointsByMeterParametersBatchReader implements ItemReader<List<
                         reading.setCommandUuid(UUID.fromString(externalJobId));
                         reading.setSystemId(12);
                         reading.setEntityType(reading.getClass().getSimpleName());
+                        accumulatorService.increment(accumulatorService.getChannel("batchJob"), AvailableMetrics.BATCH_JOB_METER_POINTS_TOTAL);
                     });
                     if (!resultList.isEmpty()) {
                         results.addAll(resultList);
                     }
                 } catch (JsonProcessingException e) {
-                    LOGGER.error("Error on mapping of received data into Reading objects\n {}", e.getMessage());
+                    accumulatorService.increment(accumulatorService.getChannel("batchJob"), AvailableMetrics.BATCH_JOB_METER_POINTS_BATCH_REQUESTS_ERROR);
+                    log.error("Error on mapping of received data into Reading objects\n {}", e.getMessage());
                 }
             });
             this.done = true;
-            LOGGER.info("End reading the information of meterpointsbymeterparametersbatch from " + this.pyramidRestUrl);
+            log.info("End reading the information of meterpointsbymeterparametersbatch from " + this.pyramidRestUrl);
             return results;
         } else {
             return null;

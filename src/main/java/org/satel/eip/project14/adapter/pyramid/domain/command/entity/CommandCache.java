@@ -15,7 +15,6 @@ public class CommandCache {
         return command.validateGuid(UUID.randomUUID());
     }
 
-    //todo lifecicle
     @JsonProperty("isExecuted")
     private Boolean isExecuted = false;
 

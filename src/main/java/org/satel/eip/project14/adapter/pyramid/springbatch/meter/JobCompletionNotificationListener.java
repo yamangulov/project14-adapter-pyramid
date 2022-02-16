@@ -4,10 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.satel.eip.project14.adapter.pyramid.domain.command.response.CommandResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -18,10 +17,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.stream.Collectors;
 
+@Slf4j
 @Component
 public class JobCompletionNotificationListener extends JobExecutionListenerSupport {
-
-    static final Logger LOGGER = LoggerFactory.getLogger("elastic-logger");
 
     private final RabbitTemplate rabbitTemplateSuccessCommand;
     private String commandUuid;
@@ -55,7 +53,7 @@ public class JobCompletionNotificationListener extends JobExecutionListenerSuppo
 
         MDC.put("commandUuid", commandUuid);
         MDC.put("operation", "Write command result");
-        LOGGER.info(result);
+        log.info(result);
 
         rabbitTemplateSuccessCommand.convertAndSend(result, m -> {
             m.getMessageProperties().setContentType(MessageProperties.CONTENT_TYPE_JSON);

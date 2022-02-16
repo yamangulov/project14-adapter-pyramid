@@ -37,10 +37,8 @@ public class GenericMapper {
             log.info("ENTITY_CLASS_MAP:\t" + ENTITY_CLASS_MAP);
             log.info("GenericRepositoryMapper initiating end");
         } catch (Exception e) {
-            //todo shutdown event
             log.error(e.getMessage());
         }
-
     }
 
 
@@ -87,23 +85,5 @@ public class GenericMapper {
     public GenericRootEntity mapToEntity(String entityType, String json) throws ClassNotFoundException, JsonProcessingException {
         return (GenericRootEntity) objectMapper.readValue(json, mapToClass(entityType));
     }
-
-    /*
-     @SuppressWarnings("unchecked")
-    public Object mapToEntity(String entityType, String json) throws ClassNotFoundException, JsonProcessingException {
-        return objectMapper.readValue(json, mapToClass(entityType));
-    }
-    * */
-
-    /*public String returnBaseEntityType(String msg) throws JsonProcessingException {
-        try {
-            return objectMapper.readValue(msg, BaseEntity.class).getEntityType();
-        } catch (Throwable e) {
-            //todo что если сообщение не json (xml, byte) пустое
-            return null;
-        }
-    }*/
-
-
 
 }
